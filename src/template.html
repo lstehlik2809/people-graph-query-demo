@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>People Graph Query Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Layout: query console (left) · live graph canvas (centre) · execution trace + result (right). Single dark theme by choice: a graph reads best on a dark field. */
+  --bg:#0c1320; --panel:#111a2a; --panel-2:#17223a; --line:#24314a; --text:#e4eaf4; --muted:#8e9bb2; --accent:#6fb1ff;
+  --person:#7fb2ff; --role:#c4a3ff; --skill:#56c7e0; --course:#f2a7d8; --cert:#efe6cf;
+  --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+  --font-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:14px/1.45 var(--font-body);-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{height:100%;display:flex;flex-direction:column}
+header.top{display:flex;align-items:center;gap:24px;padding:10px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand h1{margin:0;font-size:18px;font-weight:600;letter-spacing:.01em;text-wrap:balance}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:12px}
+.kpis{display:flex;gap:18px;margin-left:auto;flex-wrap:wrap}
+.kpi{display:flex;flex-direction:column;line-height:1.15}
+.kpi b{font-weight:600;font-size:16px;font-variant-numeric:tabular-nums}
+.kpi span{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.btn{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:#3a4a68;background:#1c2944}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#06111f;font-weight:600}
+.btn.primary:hover{background:#8cc2ff}
+.btn.small{padding:5px 9px;font-size:12px}
+.btn.ghost{background:transparent}
+main.grid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(290px,345px) minmax(0,1fr) minmax(340px,450px)}
+.pane{overflow:auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:16px;background:var(--panel)}
+.left{border-right:1px solid var(--line)} .right{border-left:1px solid var(--line)}
+h2{margin:0 0 8px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;display:flex;justify-content:space-between;gap:8px}
+h2 .count{text-transform:none;letter-spacing:0;font-weight:400}
+.qlist{display:flex;flex-direction:column;gap:1px}
+.q{display:grid;grid-template-columns:18px minmax(0,1fr) auto;column-gap:8px;align-items:baseline;text-align:left;background:transparent;border:1px solid transparent;border-radius:6px;padding:5px 8px;cursor:pointer}
+.q:hover{background:var(--panel-2)}
+.q.on{background:var(--panel-2);border-color:#33507d}
+.qn{color:var(--muted);font-family:var(--font-mono);font-size:12px}
+.q.on .qn{color:var(--accent)}
+.qt{font-weight:500}
+.qtag{color:var(--muted);font-size:11px;white-space:nowrap;text-align:right}
+.question{margin:0 0 10px;font-size:14px;line-height:1.4;text-wrap:pretty}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.field label{font-size:12px;color:var(--muted)}
+.field .row{display:flex;gap:6px}
+input,select{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;width:100%;min-width:0}
+select{cursor:pointer}
+.hint{font-size:12px;color:var(--muted)}
+.hint.err{color:var(--bad)}
+.muted{color:var(--muted)}
+.follow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.follow span{width:100%;font-size:12px;color:var(--muted)}
+.chip{background:var(--panel-2);border:1px solid #33507d;border-radius:999px;padding:5px 11px;cursor:pointer;font-size:13px}
+.chip:hover{background:#1f3051}
+.runbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.speed{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px;margin-left:auto}
+.speed select{width:auto;padding:5px 6px}
+.tabs{display:flex;gap:2px;margin-bottom:-1px}
+.tab{background:transparent;border:1px solid transparent;border-bottom:0;border-radius:6px 7px 0 0;padding:6px 10px;cursor:pointer;color:var(--muted);font-size:12px}
+.tab.on{background:var(--bg);border-color:var(--line);color:var(--text)}
+.code{margin:0;background:var(--bg);border:1px solid var(--line);border-radius:0 8px 8px 8px;padding:10px 0;font:12px/1.55 var(--font-mono);max-height:340px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+.code .ln{display:block;padding:0 12px 0 10px;border-left:2px solid transparent;transition:background .25s}
+.code .ln.on{background:rgba(111,177,255,.12);border-left-color:var(--accent)}
+.code .kw{color:#7fb2ff;font-weight:500}
+.code .str{color:#e9c38a}
+.code .fn{color:#c49cf0}
+.code .rt{color:#9aa6bd}
+.code .cm{color:#8592a9;font-style:italic}
+.code .lb[data-t="person"]{color:var(--person)} .code .lb[data-t="role"]{color:var(--role)} .code .lb[data-t="skill"]{color:var(--skill)}
+.code .lb[data-t="course"]{color:var(--course)} .code .lb[data-t="certification"]{color:var(--cert)} .code .lb[data-t="team"],.code .lb[data-t="department"]{color:#b4bccb}
+.verdict{display:flex;flex-direction:column;gap:5px;margin-top:10px;font-size:12px;color:var(--muted);line-height:1.45}
+.adv{align-self:flex-start;font-size:11px;font-weight:600;border-radius:999px;padding:2px 9px;border:1px solid}
+.adv[data-l="high"]{color:var(--ok);border-color:rgba(74,222,128,.5);background:rgba(74,222,128,.1)}
+.adv[data-l="medium"]{color:var(--warn);border-color:rgba(251,191,36,.5);background:rgba(251,191,36,.1)}
+.adv[data-l="low"]{color:#b4bccb;border-color:#3a4760;background:rgba(180,188,203,.08)}
+.stage{position:relative;min-width:0;min-height:0;background:var(--bg)}
+canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+canvas.grabbing{cursor:grabbing}
+.legend{position:absolute;left:12px;top:10px;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted);pointer-events:none;max-width:calc(100% - 230px)}
+.lg-types,.lg-depts{display:flex;flex-wrap:wrap;gap:4px 12px;background:rgba(12,19,32,.78);padding:5px 9px;border-radius:6px;align-self:flex-start}
+.lg-types span,.lg-depts span{display:inline-flex;align-items:center;gap:5px}
+.lg-depts i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.caption{position:absolute;left:12px;right:12px;bottom:12px;max-width:620px;background:rgba(17,26,42,.94);border:1px solid var(--line);border-radius:8px;padding:9px 12px;display:flex;flex-direction:column;gap:2px;pointer-events:none}
+.caption .cstep{font:500 11px var(--font-mono);color:var(--accent);text-transform:uppercase;letter-spacing:.06em}
+.caption .cdet{color:var(--muted);font-size:12px}
+.zoom{position:absolute;right:12px;top:10px;display:flex;gap:4px;align-items:center}
+.zoom button{background:rgba(17,26,42,.92);border:1px solid var(--line);border-radius:6px;min-width:32px;height:30px;padding:0 9px;cursor:pointer;font-size:13px}
+.zoom button:hover{border-color:#3a4a68}
+.hintbar{position:absolute;right:12px;bottom:12px;font-size:11px;color:#8592a9;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.tip{position:absolute;pointer-events:none;background:#16223a;border:1px solid #33456a;border-radius:8px;padding:7px 10px;font-size:12px;display:flex;flex-direction:column;gap:1px;max-width:280px;box-shadow:0 8px 24px rgba(0,0,0,.35);z-index:3}
+.tip .tt{font:500 11px var(--font-mono);text-transform:uppercase;letter-spacing:.07em}
+.tip b{font-weight:600;font-size:13px}
+.tip span{color:#b4bccb}
+.tip em{font-style:normal;color:#8592a9;font-size:11px;margin-top:3px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.stats div{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px;display:flex;flex-direction:column;line-height:1.25}
+.stats b{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
+.stats span{font-size:11px;color:var(--muted)}
+.stats div:only-child{grid-column:1/-1}
+.trace{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.trace button{display:grid;grid-template-columns:22px 1fr;gap:8px;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:8px;padding:6px 8px;cursor:pointer}
+.trace button:hover{background:var(--panel-2)}
+.trace .sn{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font:500 11px var(--font-mono);border:1px solid var(--line);color:var(--muted)}
+.trace .sb{display:flex;flex-direction:column;min-width:0}
+.trace .st{font-weight:500;font-size:13px}
+.trace .sd{font-size:12px;color:var(--muted);display:none}
+.trace .se{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.trace li.todo .st{color:var(--muted)}
+.trace li.cur button{background:var(--panel-2);border-color:#33507d}
+.trace li.cur .sn{background:var(--accent);border-color:var(--accent);color:#06111f}
+.trace li.cur .sd{display:block}
+.trace li.done .sn{border-color:rgba(74,222,128,.6);color:var(--ok)}
+.summary{font-size:14px;line-height:1.5;margin-bottom:10px;text-wrap:pretty}
+.summary b{font-weight:600}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+.tablewrap:has(table:empty){display:none}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th{position:sticky;top:0;background:var(--panel-2);text-align:left;font-weight:500;color:var(--muted);padding:6px 7px;font-size:11px;line-height:1.3;vertical-align:bottom}
+td{padding:6px 7px;border-top:1px solid var(--line);vertical-align:middle}
+th.num,td.num,td.pc{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:rgba(111,177,255,.06)}
+tbody tr.on{background:rgba(111,177,255,.14)}
+.bar{display:inline-block;width:32px;height:5px;border-radius:3px;background:#24314a;margin-right:6px;vertical-align:middle;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;white-space:nowrap;border:1px solid}
+.pill.ok{color:var(--ok);border-color:rgba(74,222,128,.45)} .pill.warn{color:var(--warn);border-color:rgba(251,191,36,.45)} .pill.bad{color:var(--bad);border-color:rgba(248,113,113,.5)}
+.pips{display:inline-flex;gap:2px;vertical-align:middle}
+.pips i{width:8px;height:8px;border-radius:2px;border:1px solid #3a4760}
+.pips i.ok{background:var(--ok);border-color:var(--ok)} .pips i.warn{background:var(--warn);border-color:var(--warn)} .pips i.need{border-color:var(--bad)}
+.foot{display:flex;flex-direction:column;gap:6px;align-items:flex-start;margin-top:8px}
+.foot p{margin:0;font-size:12px;color:var(--muted);line-height:1.5}
+.synth{font:500 11px var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:#c3ccda;border:1px solid #3a4760;border-radius:999px;padding:2px 9px;background:rgba(12,19,32,.85);pointer-events:none}
+.lg-h{color:#c3ccda}
+.note{font-size:12px;color:var(--muted);line-height:1.5;border-top:1px solid var(--line);padding-top:12px}
+.note b{color:var(--text);font-weight:500}
+.modal{position:fixed;inset:0;background:rgba(5,9,16,.72);display:grid;place-items:center;padding:16px;z-index:10}
+.modal[hidden]{display:none}
+.dialog{background:var(--panel);border:1px solid var(--line);border-radius:12px;max-width:880px;width:100%;max-height:100%;overflow:auto;padding:18px 20px}
+.dialog header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.dialog h3{margin:0;font-size:18px;font-weight:600}
+.dialog p{color:var(--muted);margin:6px 0 0;max-width:68ch;font-size:13px}
+#schema svg{width:100%;height:auto;margin-top:10px;overflow:visible}
+#schema .sn{fill:var(--text);font:600 13px var(--font-body)}
+#schema .sc{fill:var(--muted);font:11px var(--font-body)}
+#schema .se{fill:none;stroke:#5a6984;stroke-width:1.3}
+#schema .sl{fill:#b4bccb;font:11px var(--font-mono)}
+@media (max-width:1180px){
+  html,body{height:auto}
+  .app{height:auto}
+  main.grid{grid-template-columns:1fr}
+  .stage{height:66vh;min-height:420px;order:-1}
+  .pane{overflow:visible}
+  .left,.right{border:0;border-top:1px solid var(--line)}
+  .kpis{margin-left:0}
+  .hintbar span:not(.synth){display:none}
+}
+@media (max-width:620px){ .legend{max-width:calc(100% - 24px)} .hintbar{top:16px;left:12px;right:auto;bottom:auto}  .stats{grid-template-columns:1fr} .caption{max-width:none} .kpis{gap:12px} .legend{top:48px} .lg-types{font-size:11px} }
+@media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>People Graph: query demo</h1>
+      <p>Fictional company, snapshot of 18 Nov 2026 · every name and number is generated · queries run live in your browser</p>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <button id="btnModel" class="btn ghost" type="button">Data model</button>
+  </header>
+  <main class="grid">
+    <aside class="pane left" aria-label="Query console">
+      <section>
+        <h2>1 · Pick a question</h2>
+        <div id="qlist" class="qlist"></div>
+      </section>
+      <section>
+        <h2>2 · Set parameters and run</h2>
+        <div id="params"></div>
+        <datalist id="peopleList"></datalist>
+        <div class="runbar">
+          <button id="btnRun" class="btn primary" type="button">Run query</button>
+          <button id="btnStep" class="btn" type="button">Step through</button>
+          <button id="btnSkip" class="btn" type="button">Skip to result</button>
+          <label class="speed" for="speed">Speed <select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label>
+        </div>
+      </section>
+      <section>
+        <h2>3 · What the database runs</h2>
+        <div class="tabs" role="tablist">
+          <button class="tab on" type="button" role="tab" aria-selected="true" data-lang="cypher">Cypher · graph</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-lang="sql">SQL · Snowflake</button>
+        </div>
+        <pre id="code" class="code"></pre>
+        <div id="verdict" class="verdict"></div>
+      </section>
+    </aside>
+    <section class="stage" aria-label="Graph view">
+      <canvas id="cv" tabindex="0" aria-label="People graph. Drag to pan, scroll or plus and minus keys to zoom, click a node to explore it."></canvas>
+      <div class="legend" id="legend"></div>
+      <div class="zoom" id="zoom-box"><button id="zin" type="button" aria-label="Zoom in">+</button><button id="zout" type="button" aria-label="Zoom out">−</button><button id="zfit" type="button">Fit</button><button id="zclear" type="button">Clear</button></div>
+      <div class="caption" id="caption" hidden aria-live="polite"></div>
+      <div class="hintbar"><span class="synth">Synthetic data</span><span>Drag to pan · scroll to zoom · click any node</span></div>
+      <div class="tip" id="tip" hidden></div>
+    </section>
+    <aside class="pane right" aria-label="Execution and results">
+      <section>
+        <h2>Execution trace</h2>
+        <div id="stats" class="stats"></div>
+        <ol id="trace" class="trace"></ol>
+      </section>
+      <section>
+        <h2>Result <span class="count" id="resCount"></span></h2>
+        <div id="summary" class="summary"></div>
+        <div class="tablewrap"><table id="results"></table></div>
+        <div class="foot" id="resFoot"></div>
+      </section>
+      <p class="note"><b>Synthetic data.</b> No real employee is represented. <b>How to read this.</b> The query runs in a few milliseconds; the animation replays its traversal one step at a time so you can see which relationships it follows. Counts are relationships the in-browser engine actually read, not a benchmark of any graph database. Snowflake would remain the source of truth; a graph layer would sync a subset of it.</p>
+    </aside>
+  </main>
+</div>
+<div class="modal" id="modal" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <header>
+      <div>
+        <h3 id="dlgTitle">Data model</h3>
+        <p>Seven node types and fifteen relationship types. Properties live on the relationships where they belong: a skill level sits on HAS_SKILL, a required level on REQUIRES, an expiry date on CERTIFIED. In production each of these would be synced from a Snowflake table.</p>
+      </div>
+      <button class="btn" id="closeModel" type="button">Close</button>
+    </header>
+    <div id="schema"></div>
+  </div>
+</div>
+<script>
+/*__GRAPH__*/
+</script>
+<script>
+/*__UI__*/
+</script>
+</body>
+</html>

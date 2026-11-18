@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>People Graph Query Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Layout: query console (left) · live graph canvas (centre) · execution trace + result (right). Single dark theme by choice: a graph reads best on a dark field. */
+  --bg:#0c1320; --panel:#111a2a; --panel-2:#17223a; --line:#24314a; --text:#e4eaf4; --muted:#8e9bb2; --accent:#6fb1ff;
+  --person:#7fb2ff; --role:#c4a3ff; --skill:#56c7e0; --course:#f2a7d8; --cert:#efe6cf;
+  --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+  --font-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:14px/1.45 var(--font-body);-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{height:100%;display:flex;flex-direction:column}
+header.top{display:flex;align-items:center;gap:24px;padding:10px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand h1{margin:0;font-size:18px;font-weight:600;letter-spacing:.01em;text-wrap:balance}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:12px}
+.kpis{display:flex;gap:18px;margin-left:auto;flex-wrap:wrap}
+.kpi{display:flex;flex-direction:column;line-height:1.15}
+.kpi b{font-weight:600;font-size:16px;font-variant-numeric:tabular-nums}
+.kpi span{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.btn{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:#3a4a68;background:#1c2944}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#06111f;font-weight:600}
+.btn.primary:hover{background:#8cc2ff}
+.btn.small{padding:5px 9px;font-size:12px}
+.btn.ghost{background:transparent}
+main.grid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(290px,345px) minmax(0,1fr) minmax(340px,450px)}
+.pane{overflow:auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:16px;background:var(--panel)}
+.left{border-right:1px solid var(--line)} .right{border-left:1px solid var(--line)}
+h2{margin:0 0 8px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;display:flex;justify-content:space-between;gap:8px}
+h2 .count{text-transform:none;letter-spacing:0;font-weight:400}
+.qlist{display:flex;flex-direction:column;gap:1px}
+.q{display:grid;grid-template-columns:18px minmax(0,1fr) auto;column-gap:8px;align-items:baseline;text-align:left;background:transparent;border:1px solid transparent;border-radius:6px;padding:5px 8px;cursor:pointer}
+.q:hover{background:var(--panel-2)}
+.q.on{background:var(--panel-2);border-color:#33507d}
+.qn{color:var(--muted);font-family:var(--font-mono);font-size:12px}
+.q.on .qn{color:var(--accent)}
+.qt{font-weight:500}
+.qtag{color:var(--muted);font-size:11px;white-space:nowrap;text-align:right}
+.question{margin:0 0 10px;font-size:14px;line-height:1.4;text-wrap:pretty}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.field label{font-size:12px;color:var(--muted)}
+.field .row{display:flex;gap:6px}
+input,select{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;width:100%;min-width:0}
+select{cursor:pointer}
+.hint{font-size:12px;color:var(--muted)}
+.hint.err{color:var(--bad)}
+.muted{color:var(--muted)}
+.follow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.follow span{width:100%;font-size:12px;color:var(--muted)}
+.chip{background:var(--panel-2);border:1px solid #33507d;border-radius:999px;padding:5px 11px;cursor:pointer;font-size:13px}
+.chip:hover{background:#1f3051}
+.runbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.speed{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px;margin-left:auto}
+.speed select{width:auto;padding:5px 6px}
+.tabs{display:flex;gap:2px;margin-bottom:-1px}
+.tab{background:transparent;border:1px solid transparent;border-bottom:0;border-radius:6px 7px 0 0;padding:6px 10px;cursor:pointer;color:var(--muted);font-size:12px}
+.tab.on{background:var(--bg);border-color:var(--line);color:var(--text)}
+.code{margin:0;background:var(--bg);border:1px solid var(--line);border-radius:0 8px 8px 8px;padding:10px 0;font:12px/1.55 var(--font-mono);max-height:340px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+.code .ln{display:block;padding:0 12px 0 10px;border-left:2px solid transparent;transition:background .25s}
+.code .ln.on{background:rgba(111,177,255,.12);border-left-color:var(--accent)}
+.code .kw{color:#7fb2ff;font-weight:500}
+.code .str{color:#e9c38a}
+.code .fn{color:#c49cf0}
+.code .rt{color:#9aa6bd}
+.code .cm{color:#8592a9;font-style:italic}
+.code .lb[data-t="person"]{color:var(--person)} .code .lb[data-t="role"]{color:var(--role)} .code .lb[data-t="skill"]{color:var(--skill)}
+.code .lb[data-t="course"]{color:var(--course)} .code .lb[data-t="certification"]{color:var(--cert)} .code .lb[data-t="team"],.code .lb[data-t="department"]{color:#b4bccb}
+.verdict{display:flex;flex-direction:column;gap:5px;margin-top:10px;font-size:12px;color:var(--muted);line-height:1.45}
+.adv{align-self:flex-start;font-size:11px;font-weight:600;border-radius:999px;padding:2px 9px;border:1px solid}
+.adv[data-l="high"]{color:var(--ok);border-color:rgba(74,222,128,.5);background:rgba(74,222,128,.1)}
+.adv[data-l="medium"]{color:var(--warn);border-color:rgba(251,191,36,.5);background:rgba(251,191,36,.1)}
+.adv[data-l="low"]{color:#b4bccb;border-color:#3a4760;background:rgba(180,188,203,.08)}
+.stage{position:relative;min-width:0;min-height:0;background:var(--bg)}
+canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+canvas.grabbing{cursor:grabbing}
+.legend{position:absolute;left:12px;top:10px;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted);pointer-events:none;max-width:calc(100% - 230px)}
+.lg-types,.lg-depts{display:flex;flex-wrap:wrap;gap:4px 12px;background:rgba(12,19,32,.78);padding:5px 9px;border-radius:6px;align-self:flex-start}
+.lg-types span,.lg-depts span{display:inline-flex;align-items:center;gap:5px}
+.lg-depts i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.caption{position:absolute;left:12px;right:12px;bottom:12px;max-width:620px;background:rgba(17,26,42,.94);border:1px solid var(--line);border-radius:8px;padding:9px 12px;display:flex;flex-direction:column;gap:2px;pointer-events:none}
+.caption .cstep{font:500 11px var(--font-mono);color:var(--accent);text-transform:uppercase;letter-spacing:.06em}
+.caption .cdet{color:var(--muted);font-size:12px}
+.zoom{position:absolute;right:12px;top:10px;display:flex;gap:4px;align-items:center}
+.zoom button{background:rgba(17,26,42,.92);border:1px solid var(--line);border-radius:6px;min-width:32px;height:30px;padding:0 9px;cursor:pointer;font-size:13px}
+.zoom button:hover{border-color:#3a4a68}
+.hintbar{position:absolute;right:12px;bottom:12px;font-size:11px;color:#8592a9;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.tip{position:absolute;pointer-events:none;background:#16223a;border:1px solid #33456a;border-radius:8px;padding:7px 10px;font-size:12px;display:flex;flex-direction:column;gap:1px;max-width:280px;box-shadow:0 8px 24px rgba(0,0,0,.35);z-index:3}
+.tip .tt{font:500 11px var(--font-mono);text-transform:uppercase;letter-spacing:.07em}
+.tip b{font-weight:600;font-size:13px}
+.tip span{color:#b4bccb}
+.tip em{font-style:normal;color:#8592a9;font-size:11px;margin-top:3px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.stats div{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px;display:flex;flex-direction:column;line-height:1.25}
+.stats b{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
+.stats span{font-size:11px;color:var(--muted)}
+.stats div:only-child{grid-column:1/-1}
+.trace{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.trace button{display:grid;grid-template-columns:22px 1fr;gap:8px;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:8px;padding:6px 8px;cursor:pointer}
+.trace button:hover{background:var(--panel-2)}
+.trace .sn{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font:500 11px var(--font-mono);border:1px solid var(--line);color:var(--muted)}
+.trace .sb{display:flex;flex-direction:column;min-width:0}
+.trace .st{font-weight:500;font-size:13px}
+.trace .sd{font-size:12px;color:var(--muted);display:none}
+.trace .se{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.trace li.todo .st{color:var(--muted)}
+.trace li.cur button{background:var(--panel-2);border-color:#33507d}
+.trace li.cur .sn{background:var(--accent);border-color:var(--accent);color:#06111f}
+.trace li.cur .sd{display:block}
+.trace li.done .sn{border-color:rgba(74,222,128,.6);color:var(--ok)}
+.summary{font-size:14px;line-height:1.5;margin-bottom:10px;text-wrap:pretty}
+.summary b{font-weight:600}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+.tablewrap:has(table:empty){display:none}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th{position:sticky;top:0;background:var(--panel-2);text-align:left;font-weight:500;color:var(--muted);padding:6px 7px;font-size:11px;line-height:1.3;vertical-align:bottom}
+td{padding:6px 7px;border-top:1px solid var(--line);vertical-align:middle}
+th.num,td.num,td.pc{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:rgba(111,177,255,.06)}
+tbody tr.on{background:rgba(111,177,255,.14)}
+.bar{display:inline-block;width:32px;height:5px;border-radius:3px;background:#24314a;margin-right:6px;vertical-align:middle;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;white-space:nowrap;border:1px solid}
+.pill.ok{color:var(--ok);border-color:rgba(74,222,128,.45)} .pill.warn{color:var(--warn);border-color:rgba(251,191,36,.45)} .pill.bad{color:var(--bad);border-color:rgba(248,113,113,.5)}
+.pips{display:inline-flex;gap:2px;vertical-align:middle}
+.pips i{width:8px;height:8px;border-radius:2px;border:1px solid #3a4760}
+.pips i.ok{background:var(--ok);border-color:var(--ok)} .pips i.warn{background:var(--warn);border-color:var(--warn)} .pips i.need{border-color:var(--bad)}
+.foot{display:flex;flex-direction:column;gap:6px;align-items:flex-start;margin-top:8px}
+.foot p{margin:0;font-size:12px;color:var(--muted);line-height:1.5}
+.synth{font:500 11px var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:#c3ccda;border:1px solid #3a4760;border-radius:999px;padding:2px 9px;background:rgba(12,19,32,.85);pointer-events:none}
+.lg-h{color:#c3ccda}
+.note{font-size:12px;color:var(--muted);line-height:1.5;border-top:1px solid var(--line);padding-top:12px}
+.note b{color:var(--text);font-weight:500}
+.modal{position:fixed;inset:0;background:rgba(5,9,16,.72);display:grid;place-items:center;padding:16px;z-index:10}
+.modal[hidden]{display:none}
+.dialog{background:var(--panel);border:1px solid var(--line);border-radius:12px;max-width:880px;width:100%;max-height:100%;overflow:auto;padding:18px 20px}
+.dialog header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.dialog h3{margin:0;font-size:18px;font-weight:600}
+.dialog p{color:var(--muted);margin:6px 0 0;max-width:68ch;font-size:13px}
+#schema svg{width:100%;height:auto;margin-top:10px;overflow:visible}
+#schema .sn{fill:var(--text);font:600 13px var(--font-body)}
+#schema .sc{fill:var(--muted);font:11px var(--font-body)}
+#schema .se{fill:none;stroke:#5a6984;stroke-width:1.3}
+#schema .sl{fill:#b4bccb;font:11px var(--font-mono)}
+@media (max-width:1180px){
+  html,body{height:auto}
+  .app{height:auto}
+  main.grid{grid-template-columns:1fr}
+  .stage{height:66vh;min-height:420px;order:-1}
+  .pane{overflow:visible}
+  .left,.right{border:0;border-top:1px solid var(--line)}
+  .kpis{margin-left:0}
+  .hintbar span:not(.synth){display:none}
+}
+@media (max-width:620px){ .legend{max-width:calc(100% - 24px)} .hintbar{top:16px;left:12px;right:auto;bottom:auto}  .stats{grid-template-columns:1fr} .caption{max-width:none} .kpis{gap:12px} .legend{top:48px} .lg-types{font-size:11px} }
+@media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>People Graph: query demo</h1>
+      <p>Fictional company, snapshot of 18 Nov 2026 · every name and number is generated · queries run live in your browser</p>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <button id="btnModel" class="btn ghost" type="button">Data model</button>
+  </header>
+  <main class="grid">
+    <aside class="pane left" aria-label="Query console">
+      <section>
+        <h2>1 · Pick a question</h2>
+        <div id="qlist" class="qlist"></div>
+      </section>
+      <section>
+        <h2>2 · Set parameters and run</h2>
+        <div id="params"></div>
+        <datalist id="peopleList"></datalist>
+        <div class="runbar">
+          <button id="btnRun" class="btn primary" type="button">Run query</button>
+          <button id="btnStep" class="btn" type="button">Step through</button>
+          <button id="btnSkip" class="btn" type="button">Skip to result</button>
+          <label class="speed" for="speed">Speed <select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label>
+        </div>
+      </section>
+      <section>
+        <h2>3 · What the database runs</h2>
+        <div class="tabs" role="tablist">
+          <button class="tab on" type="button" role="tab" aria-selected="true" data-lang="cypher">Cypher · graph</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-lang="sql">SQL · Snowflake</button>
+        </div>
+        <pre id="code" class="code"></pre>
+        <div id="verdict" class="verdict"></div>
+      </section>
+    </aside>
+    <section class="stage" aria-label="Graph view">
+      <canvas id="cv" tabindex="0" aria-label="People graph. Drag to pan, scroll or plus and minus keys to zoom, click a node to explore it."></canvas>
+      <div class="legend" id="legend"></div>
+      <div class="zoom" id="zoom-box"><button id="zin" type="button" aria-label="Zoom in">+</button><button id="zout" type="button" aria-label="Zoom out">−</button><button id="zfit" type="button">Fit</button><button id="zclear" type="button">Clear</button></div>
+      <div class="caption" id="caption" hidden aria-live="polite"></div>
+      <div class="hintbar"><span class="synth">Synthetic data</span><span>Drag to pan · scroll to zoom · click any node</span></div>
+      <div class="tip" id="tip" hidden></div>
+    </section>
+    <aside class="pane right" aria-label="Execution and results">
+      <section>
+        <h2>Execution trace</h2>
+        <div id="stats" class="stats"></div>
+        <ol id="trace" class="trace"></ol>
+      </section>
+      <section>
+        <h2>Result <span class="count" id="resCount"></span></h2>
+        <div id="summary" class="summary"></div>
+        <div class="tablewrap"><table id="results"></table></div>
+        <div class="foot" id="resFoot"></div>
+      </section>
+      <p class="note"><b>Synthetic data.</b> No real employee is represented. <b>How to read this.</b> The query runs in a few milliseconds; the animation replays its traversal one step at a time so you can see which relationships it follows. Counts are relationships the in-browser engine actually read, not a benchmark of any graph database. Snowflake would remain the source of truth; a graph layer would sync a subset of it.</p>
+    </aside>
+  </main>
+</div>
+<div class="modal" id="modal" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <header>
+      <div>
+        <h3 id="dlgTitle">Data model</h3>
+        <p>Seven node types and fifteen relationship types. Properties live on the relationships where they belong: a skill level sits on HAS_SKILL, a required level on REQUIRES, an expiry date on CERTIFIED. In production each of these would be synced from a Snowflake table.</p>
+      </div>
+      <button class="btn" id="closeModel" type="button">Close</button>
+    </header>
+    <div id="schema"></div>
+  </div>
+</div>
+<script>
+// People graph: synthetic data generator + in-memory graph + query engine.
+// Everything is deterministic (seeded), so every viewer sees the same company.
+const PG = (function () {
+'use strict';
+
+// ---------- seeded randomness ----------
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const rnd = mulberry32(20261118);
+const pick = a => a[Math.floor(rnd()*a.length)];
+const ri = (a,b) => a + Math.floor(rnd()*(b-a+1));
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+function wpick(obj){ let tot=0; for(const k in obj) tot+=obj[k]; let r=rnd()*tot; for(const k in obj){ r-=obj[k]; if(r<=0) return k; } return Object.keys(obj)[0]; }
+function sample(arr,k){ const a=arr.slice(); const outp=[]; while(a.length && outp.length<k){ outp.push(a.splice(Math.floor(rnd()*a.length),1)[0]); } return outp; }
+
+const TODAY = Date.UTC(2026,10,18), DAY = 86400000;
+const iso = ms => new Date(ms).toISOString().slice(0,10);
+
+// ---------- colours shared with the renderer ----------
+// Type colours (what a node is) and status colours (how it scores) never share a hue.
+const C = { person:'#7fb2ff', role:'#c4a3ff', skill:'#56c7e0', course:'#f2a7d8', cert:'#efe6cf', team:'#8b95a8', dept:'#8b95a8',
+  ok:'#4ade80', warn:'#fbbf24', bad:'#f87171', muted:'#6d7a91', link:'#8fa3c4', focus:'#ffffff', deptA:'#7fb2ff', deptB:'#ff9f5a' };
+const TYPE_COLOR = { Person:C.person, Role:C.role, Skill:C.skill, Course:C.course, Certification:C.cert, Team:C.team, Department:C.dept };
+
+// ---------- graph store ----------
+const N=[], E=[], outE=[], inE=[];
+function addNode(type,name,props){ const n=Object.assign({id:N.length,type,name},props||{}); N.push(n); outE.push([]); inE.push([]); return n; }
+function addEdge(s,t,type,props){ const e=Object.assign({id:E.length,s,t,type},props||{}); E.push(e); outE[s].push(e.id); inE[t].push(e.id); return e; }
+
+// tracing: every relationship the query engine touches is counted
+let TR=null;
+function out(id,type){ const r=[]; for(const i of outE[id]){ const e=E[i]; if(!type||e.type===type) r.push(e); } if(TR){ TR.edges+=r.length; TR.nodes.add(id); for(const e of r) TR.nodes.add(e.t); } return r; }
+function inn(id,type){ const r=[]; for(const i of inE[id]){ const e=E[i]; if(!type||e.type===type) r.push(e); } if(TR){ TR.edges+=r.length; TR.nodes.add(id); for(const e of r) TR.nodes.add(e.s); } return r; }
+function both(id,type){ return out(id,type).map(e=>({e,o:e.t})).concat(inn(id,type).map(e=>({e,o:e.s}))); }
+// silent (untraced) helpers for setup
+const sOut=(id,type)=>outE[id].map(i=>E[i]).filter(e=>!type||e.type===type);
+const sIn=(id,type)=>inE[id].map(i=>E[i]).filter(e=>!type||e.type===type);
+
+// ---------- reference data ----------
+const SKILL_CATS = {
+  'Engineering':['Software Engineering','System Design','Cloud Architecture','Testing & QA','DevOps','Product Discovery','UX Research','Security Engineering'],
+  'Customer':['Customer Onboarding','Account Health Analysis','Technical Support','Product Training','Customer Advocacy'],
+  'Commercial':['Account Planning','Negotiation','Pricing','Brand Strategy','Customer Insights','CRM Analytics','Market Research'],
+  'Finance':['Financial Modelling','Budgeting','Business Partnering','Forecasting'],
+  'People':['People Leadership','Coaching','Talent Acquisition','Workforce Planning','People Analytics','Employee Relations'],
+  'Data & IT':['Python','SQL','Machine Learning','Cloud Data Engineering','Data Visualization','Generative AI','MLOps','Agile Delivery'],
+  'Risk & Compliance':['Risk Assessment','Internal Audit','Incident Management','Data Protection','Process Controls'],
+  'Operations':['Health & Safety','Equipment Operation','Quality Inspection','Process Improvement','Logistics Planning','Inventory Management','Lean Six Sigma','Supply Planning'],
+  'Transversal':['Stakeholder Management','Project Management','Change Management','Strategic Thinking','Data Literacy','Problem Solving'],
+};
+// emerging / niche skills are rarer at expert level
+const SCARCE = {'Generative AI':-1.3,'MLOps':-0.9,'Security Engineering':-1.0,'Pricing':-0.6,'Cloud Architecture':-0.7,'Workforce Planning':-0.7,'Customer Advocacy':-0.5,'Logistics Planning':-0.4};
+
+const DEPTS = [
+  {key:'ENG', name:'Product & Engineering', hc:210, cat:'Engineering', locs:['Amsterdam','Dublin','Toronto']},
+  {key:'CS',name:'Customer Success', hc:60, cat:'Customer', locs:['Dublin','Lisbon','Warsaw']},
+  {key:'SM',name:'Sales & Marketing', hc:170, cat:'Commercial', locs:['Amsterdam','Madrid','Milan','Warsaw','Manchester']},
+  {key:'FIN',name:'Finance', hc:50, cat:'Finance', locs:['Amsterdam','Lisbon']},
+  {key:'HR', name:'People & Culture', hc:45, cat:'People', locs:['Amsterdam','Warsaw','Lisbon']},
+  {key:'DIT',name:'Data & IT', hc:85, cat:'Data & IT', locs:['Lisbon','Warsaw','Dublin','Amsterdam']},
+  {key:'RC', name:'Risk & Compliance', hc:80, cat:'Risk & Compliance', locs:['Amsterdam','Dublin']},
+  {key:'OPS', name:'Operations', hc:299, cat:'Operations', locs:['Rotterdam','Manchester','Poznan']},
+];
+const deptByKey = {}; DEPTS.forEach(d=>deptByKey[d.key]=d);
+deptByKey.EXEC = {key:'EXEC', name:'Executive Office', locs:['Amsterdam']};
+
+const ROLE_DEFS = [
+ ['JSE','Junior Software Engineer','ENG',1,['Software Engineering','Testing & QA','DevOps','Data Literacy','Problem Solving']],
+ ['SWE','Software Engineer','ENG',2,['Software Engineering','System Design','Testing & QA','DevOps','Data Literacy','Project Management']],
+ ['SSE','Senior Software Engineer','ENG',3,['System Design','Software Engineering','Cloud Architecture','Security Engineering','Project Management','Stakeholder Management']],
+ ['PRIN','Principal Engineer','ENG',4,['Cloud Architecture','System Design','Product Discovery','Strategic Thinking','Stakeholder Management','Security Engineering']],
+ ['QAE','QA Automation Engineer','ENG',3,['Testing & QA','Software Engineering','Python','Data Literacy','DevOps']],
+ ['DSGN','Product Designer','ENG',3,['UX Research','Product Discovery','Customer Insights','Data Visualization','Stakeholder Management']],
+ ['PM','Product Manager','ENG',4,['Product Discovery','Project Management','Stakeholder Management','UX Research','People Leadership']],
+ ['EM','Engineering Manager','ENG',4,['People Leadership','Software Engineering','Project Management','System Design','Coaching']],
+ ['HEAD_ENG','Head of Product & Engineering','ENG',5,['Strategic Thinking','People Leadership','Cloud Architecture','Stakeholder Management','Change Management']],
+ ['CSM','Customer Success Manager','CS',2,['Customer Onboarding','Account Health Analysis','Product Training','Customer Insights','Stakeholder Management']],
+ ['SCSM','Senior Customer Success Manager','CS',3,['Account Health Analysis','Customer Advocacy','Customer Onboarding','Negotiation','Stakeholder Management']],
+ ['SUPP','Support Specialist','CS',2,['Technical Support','Product Training','Incident Management','Data Protection','Data Literacy']],
+ ['CSLEAD','Customer Success Lead','CS',4,['People Leadership','Customer Advocacy','Account Health Analysis','Coaching','Strategic Thinking']],
+ ['HEAD_CS','Head of Customer Success','CS',5,['Strategic Thinking','People Leadership','Customer Advocacy','Stakeholder Management','Change Management']],
+ ['SDR','Sales Development Representative','SM',1,['Account Planning','Negotiation','Customer Insights','Product Training','Problem Solving']],
+ ['AE','Account Executive','SM',3,['Account Planning','Negotiation','Stakeholder Management','Pricing','Customer Insights']],
+ ['MKT','Marketing Manager','SM',3,['Brand Strategy','Customer Insights','Project Management','Data Literacy','Budgeting']],
+ ['PRC','Pricing Manager','SM',3,['Pricing','Market Research','Financial Modelling','Negotiation','Stakeholder Management']],
+ ['SALOPS','Sales Operations Analyst','SM',2,['CRM Analytics','SQL','Data Visualization','Customer Insights','Forecasting']],
+ ['COMLEAD','Sales & Marketing Team Lead','SM',4,['People Leadership','Coaching','Account Planning','Negotiation','Forecasting']],
+ ['HEAD_SM','Head of Sales & Marketing','SM',5,['Strategic Thinking','People Leadership','Brand Strategy','Stakeholder Management','Change Management']],
+ ['FA','Financial Analyst','FIN',2,['Financial Modelling','Forecasting','Budgeting','SQL','Data Literacy']],
+ ['CTRL','Business Controller','FIN',3,['Business Partnering','Budgeting','Financial Modelling','Stakeholder Management','Forecasting']],
+ ['FPA','FP&A Manager','FIN',4,['Forecasting','Financial Modelling','People Leadership','Business Partnering','Strategic Thinking']],
+ ['HEAD_FIN','Chief Financial Officer','FIN',5,['Strategic Thinking','People Leadership','Financial Modelling','Stakeholder Management','Change Management']],
+ ['HRBP','HR Business Partner','HR',3,['Employee Relations','Coaching','Change Management','Stakeholder Management','Workforce Planning']],
+ ['TA','Talent Acquisition Specialist','HR',2,['Talent Acquisition','Stakeholder Management','Negotiation','Data Literacy','Problem Solving']],
+ ['PA','People Analyst','HR',3,['People Analytics','SQL','Python','Data Visualization','Workforce Planning','Stakeholder Management']],
+ ['HRLEAD','HR Team Lead','HR',4,['People Leadership','Coaching','Employee Relations','Change Management','Workforce Planning']],
+ ['HEAD_HR','Head of People & Culture','HR',5,['Strategic Thinking','People Leadership','Workforce Planning','Stakeholder Management','Change Management']],
+ ['DE','Data Engineer','DIT',2,['SQL','Cloud Data Engineering','Python','Agile Delivery','Data Literacy']],
+ ['DS','Data Scientist','DIT',3,['Python','Machine Learning','SQL','Data Visualization','Problem Solving','Stakeholder Management']],
+ ['ML','ML Engineer','DIT',3,['MLOps','Python','Machine Learning','Cloud Data Engineering','Generative AI']],
+ ['ODA','Operations Data Analyst','DIT',2,['SQL','Data Visualization','Python','Inventory Management','Lean Six Sigma']],
+ ['PO','Product Owner','DIT',3,['Agile Delivery','Stakeholder Management','Project Management','Data Literacy','Change Management']],
+ ['DIGLEAD','Data & IT Team Lead','DIT',4,['People Leadership','Agile Delivery','Cloud Data Engineering','Coaching','Strategic Thinking']],
+ ['HEAD_DIT','Head of Data & IT','DIT',5,['Strategic Thinking','People Leadership','Cloud Data Engineering','Stakeholder Management','Change Management']],
+ ['COMPA','Compliance Analyst','RC',1,['Process Controls','Data Protection','Risk Assessment','Internal Audit','Problem Solving']],
+ ['RISK','Risk Analyst','RC',2,['Risk Assessment','Incident Management','Process Controls','Data Protection','Internal Audit']],
+ ['AUD','Internal Auditor','RC',3,['Internal Audit','Process Controls','Risk Assessment','Data Protection','Project Management']],
+ ['COMPM','Compliance Manager','RC',4,['Risk Assessment','Internal Audit','People Leadership','Data Protection','Incident Management']],
+ ['HEAD_RC','Head of Risk & Compliance','RC',5,['Strategic Thinking','People Leadership','Risk Assessment','Stakeholder Management','Change Management']],
+ ['OPA','Operations Associate','OPS',1,['Health & Safety','Equipment Operation','Quality Inspection','Problem Solving']],
+ ['OPT','Operations Technician','OPS',2,['Health & Safety','Equipment Operation','Quality Inspection','Inventory Management','Lean Six Sigma']],
+ ['PE','Process Engineer','OPS',3,['Process Improvement','Logistics Planning','Health & Safety','Lean Six Sigma','Data Literacy','Python']],
+ ['SCP','Supply Chain Planner','OPS',2,['Supply Planning','Forecasting','SQL','Stakeholder Management','Inventory Management']],
+ ['OPSUP','Operations Supervisor','OPS',4,['People Leadership','Health & Safety','Lean Six Sigma','Process Improvement','Coaching']],
+ ['HEAD_OPS','Head of Operations','OPS',5,['Strategic Thinking','People Leadership','Supply Planning','Stakeholder Management','Change Management']],
+ ['CEO','Chief Executive Officer','EXEC',5,['Strategic Thinking','People Leadership','Stakeholder Management','Change Management','Financial Modelling']],
+];
+const CORE=[0,2,3,4,4,4], OTHER=[0,1,2,3,3,4];
+
+const NEXT = {JSE:['SWE'],SWE:['SSE','QAE','PO'],SSE:['PRIN','EM','PM','DE'],PRIN:['EM','HEAD_ENG','PM'],QAE:['SWE','DE'],DSGN:['PM','MKT'],PM:['HEAD_ENG'],EM:['HEAD_ENG'],
+ CSM:['SCSM','AE','CSLEAD'],SCSM:['CSLEAD','AE'],SUPP:['CSM','RISK'],CSLEAD:['HEAD_CS'],
+ SDR:['AE','SALOPS','CSM'],AE:['COMLEAD','PRC','MKT'],MKT:['COMLEAD','HEAD_SM'],PRC:['MKT','COMLEAD','CTRL'],SALOPS:['DS','MKT','FA'],COMLEAD:['HEAD_SM'],
+ FA:['CTRL','SALOPS','PA'],CTRL:['FPA'],FPA:['HEAD_FIN'],
+ TA:['HRBP'],HRBP:['HRLEAD'],PA:['DS','HRBP'],HRLEAD:['HEAD_HR'],
+ DE:['DS','ML','PO'],DS:['ML','PO','DIGLEAD'],ML:['DIGLEAD'],ODA:['DE','PE','DS'],PO:['DIGLEAD','PM'],DIGLEAD:['HEAD_DIT'],
+ COMPA:['RISK','AUD'],RISK:['AUD','COMPM','CTRL'],AUD:['COMPM','CTRL'],COMPM:['HEAD_RC'],
+ OPA:['OPT'],OPT:['PE','OPSUP','COMPA','ODA'],PE:['OPSUP','RISK','ODA','SCP'],SCP:['FA','OPSUP'],OPSUP:['HEAD_OPS'],
+ HEAD_ENG:['CEO'],HEAD_SM:['CEO'],HEAD_FIN:['CEO']};
+const PREV = {}; for(const a in NEXT) for(const b of NEXT[a]) (PREV[b]=PREV[b]||[]).push(a);
+
+const ENG = {JSE:4,SWE:4,SSE:2,PRIN:1};
+const TEAMS = {
+ ENG:[{n:'Platform',lead:'EM',mix:ENG},{n:'Payments',lead:'EM',mix:ENG},{n:'QA Automation',lead:'EM',mix:{QAE:6,SWE:1}},{n:'Mobile Apps',lead:'EM',mix:ENG},{n:'Product Design',lead:'EM',mix:{DSGN:5,SWE:1}},{n:'Product Management',lead:'PM',mix:{DSGN:2,SWE:2,JSE:1}},{n:'Core Services',lead:'EM',mix:ENG}],
+ CS:[{n:'Enterprise Customers',lead:'CSLEAD',mix:{CSM:4,SCSM:2}},{n:'Support Desk',lead:'CSLEAD',mix:{SUPP:6,SCSM:1}},{n:'Mid-Market Customers',lead:'CSLEAD',mix:{CSM:4,SCSM:2}}],
+ SM:[{n:'Field Sales North',lead:'COMLEAD',mix:{SDR:6,AE:2}},{n:'Key Accounts',lead:'COMLEAD',mix:{AE:5,SDR:1}},{n:'Field Sales South',lead:'COMLEAD',mix:{SDR:6,AE:2}},{n:'Marketing',lead:'COMLEAD',mix:{MKT:4,SALOPS:1}},{n:'Pricing',lead:'COMLEAD',mix:{PRC:4,MKT:1}},{n:'Field Sales Central',lead:'COMLEAD',mix:{SDR:6,AE:2}},{n:'Sales Operations',lead:'COMLEAD',mix:{SALOPS:5}}],
+ FIN:[{n:'FP&A',lead:'FPA',mix:{FA:4,CTRL:1}},{n:'Business Controlling',lead:'FPA',mix:{CTRL:4,FA:2}},{n:'Accounting',lead:'FPA',mix:{FA:5}}],
+ HR:[{n:'HR Business Partnering',lead:'HRLEAD',mix:{HRBP:5}},{n:'Talent Acquisition',lead:'HRLEAD',mix:{TA:5}},{n:'People Analytics',lead:'HRLEAD',mix:{PA:4}}],
+ DIT:[{n:'Data Platform',lead:'DIGLEAD',mix:{DE:5,PO:1}},{n:'Data Science',lead:'DIGLEAD',mix:{DS:5,ML:1}},{n:'Operations Analytics',lead:'DIGLEAD',mix:{ODA:4,DE:1}},{n:'AI & ML Engineering',lead:'DIGLEAD',mix:{ML:4,DS:1,DE:1}},{n:'Digital Products',lead:'DIGLEAD',mix:{PO:3,DE:2,DS:1}}],
+ RC:[{n:'Compliance Office',lead:'COMPM',mix:{COMPA:6,RISK:1}},{n:'Risk Management',lead:'COMPM',mix:{RISK:5,COMPA:1}},{n:'Internal Audit',lead:'COMPM',mix:{AUD:5}}],
+ OPS:[{n:'Fulfilment Centre',lead:'OPSUP',mix:{OPA:6,OPT:3}},{n:'Inbound Logistics',lead:'OPSUP',mix:{OPA:4,OPT:3,PE:1}},{n:'Outbound Logistics',lead:'OPSUP',mix:{OPA:4,OPT:3,PE:1}},{n:'Process Engineering',lead:'OPSUP',mix:{PE:5,OPT:1}},{n:'Packing & Dispatch',lead:'OPSUP',mix:{OPA:7,OPT:2}},{n:'Supply Planning',lead:'OPSUP',mix:{SCP:5}},{n:'Maintenance',lead:'OPSUP',mix:{OPT:5,PE:1}}],
+};
+
+const CERTS = [
+ ['HS','Health & Safety Certification (annual)',['OPA','OPT','PE','OPSUP','HEAD_OPS']],
+ ['EQUIP','Equipment Operator Licence',['OPA','OPT']],
+ ['DP','Data Protection Certification',['SUPP','COMPA','RISK','AUD','COMPM','HRBP','PA']],
+];
+const CERT_SHORT = {HS:'Health & Safety', EQUIP:'Equipment licence', DP:'Data protection'};
+
+const COURSE_FOUND = ['Python','SQL','Machine Learning','MLOps','Cloud Data Engineering','Data Visualization','Generative AI','Software Engineering','Cloud Architecture','Security Engineering','Testing & QA','Product Discovery','UX Research','Health & Safety','Equipment Operation','Process Improvement','Lean Six Sigma','Logistics Planning','Risk Assessment','Incident Management','Data Protection','People Leadership','Coaching','Stakeholder Management','Project Management','Change Management','Financial Modelling','Pricing','Negotiation','People Analytics','Workforce Planning','Strategic Thinking','Data Literacy'];
+const COURSE_ADV = ['Python','SQL','Machine Learning','MLOps','Cloud Data Engineering','Generative AI','Software Engineering','Cloud Architecture','Security Engineering','Process Improvement','Lean Six Sigma','People Leadership','Project Management','Financial Modelling','People Analytics','Data Visualization'];
+const COURSE_NAMES = {'Lean Six Sigma':['Lean Six Sigma Yellow Belt','Lean Six Sigma Green Belt'],'People Leadership':['First-Time Manager Programme','Leading Leaders Programme'],'Health & Safety':['Health & Safety Essentials','Advanced Health & Safety']};
+const CROSS_PREREQ = [['Machine Learning','Python'],['MLOps','Machine Learning'],['MLOps','Cloud Data Engineering'],['Generative AI','Python'],['Process Improvement','Lean Six Sigma'],['Equipment Operation','Health & Safety'],['People Analytics','SQL'],['Security Engineering','Software Engineering'],['Cloud Architecture','Software Engineering']];
+const PROVIDERS = ['Internal academy','External e-learning','University partner','Vendor training'];
+
+const FIRST =
+['Anna','Lukas','Marie','Jakub','Sofia','Thomas','Camille','Elena','Mateo','Julia','Pierre','Klara','David','Lea','Marco','Petra','Hugo','Nina','Tomas','Ines','Felix','Zofia','Omar','Laura','Martin','Chloe','Adam','Eva','Luca','Sara','Daniel','Amelie','Pavel','Isabel','Jonas','Mia','Andrei','Noemi','Samuel','Hana','Victor','Alice','Karim','Lucia','Ben','Emma','Oskar','Leila','Matej','Clara','Nikolai','Giulia','Erik','Aisha','Viktor','Rosa','Henrik','Maya','Filip','Yusuf','Priya','Dario','Sven','Ana','Rafael','Lina','Jan','Ewa','Teodor','Manon'];
+const LAST = ['Novak','Dubois','Schmidt','Rossi','Garcia','Kowalski','Horvath','Martin','Bernard','Muller','Fischer','Weber','Moreau','Laurent','Lefevre','Ricci','Romano','Lopez','Fernandez','Svoboda','Dvorak','Nagy','Toth','Szabo','Wagner','Becker','Hoffmann','Petit','Durand','Leroy','Conti','Greco','Sanchez','Torres','Nowak','Wisniewski','Cerny','Prochazka','Kovacs','Varga','Peeters','Janssens','Maes','Jacobs','Mertens','Smith','Johnson','Brown','Lee','Walker','Hall','Young','Allen','King','Wright','Scott','Green','Baker','Adams','Nelson','Carter','Mitchell','Roberts','Turner','Phillips','Campbell','Parker','Evans','Edwards','Collins','Stewart','Morris','Murphy','Cook','Rogers','Morgan','Bell','Ward','Cooper','Haddad','Rahman','Ivanova','Petrov','Silva','Costa'];
+
+// ---------- build nodes ----------
+const deptNode = {};
+for(const d of DEPTS){ deptNode[d.key] = addNode('Department', d.name, {key:d.key}).id; }
+const skillId = {}; const TRANS = SKILL_CATS.Transversal;
+for(const cat in SKILL_CATS) for(const s of SKILL_CATS[cat]) skillId[s] = addNode('Skill', s, {cat}).id;
+const roleId = {};
+for(const [k,title,dept,sen,sk] of ROLE_DEFS){
+  const r = addNode('Role', title, {key:k, dept, sen});
+  roleId[k] = r.id;
+  sk.forEach((s,i)=>{ let lvl = i<3 ? CORE[sen] : OTHER[sen]; if(sen===5 && i===0) lvl=5; addEdge(r.id, skillId[s], 'REQUIRES', {level:lvl, core:i<3}); });
+}
+// courses
+const courseFor = {}; // skill -> [foundation, advanced]
+for(const s of COURSE_FOUND){
+  const names = COURSE_NAMES[s] || [s+' Foundations','Advanced '+s];
+  const f = addNode('Course', names[0], {hours:ri(4,12), provider:pick(PROVIDERS), upTo:2, skill:skillId[s]});
+  addEdge(f.id, skillId[s], 'TEACHES', {upTo:2});
+  courseFor[s] = [f.id];
+  if(COURSE_ADV.includes(s)){
+    const a = addNode('Course', names[1], {hours:ri(14,32), provider:pick(PROVIDERS), upTo:4, skill:skillId[s], adv:true});
+    addEdge(a.id, skillId[s], 'TEACHES', {upTo:4});
+    addEdge(a.id, f.id, 'REQUIRES_COURSE');
+    courseFor[s].push(a.id);
+  }
+}
+for(const [a,b] of CROSS_PREREQ){ addEdge(courseFor[a][0], courseFor[b][0], 'REQUIRES_COURSE'); }
+// certifications
+const certId = {};
+for(const [k,name,roles] of CERTS){ const c = addNode('Certification', name, {key:k}); certId[k]=c.id; for(const rk of roles) addEdge(roleId[rk], c.id, 'REQUIRES_CERT'); }
+
+// ---------- people & org ----------
+const usedNames = new Set();
+function newName(){ for(let i=0;i<80;i++){ const n=pick(FIRST)+' '+pick(LAST); if(!usedNames.has(n)){ usedNames.add(n); return n; } } let n; do{ n=pick(FIRST)+' '+String.fromCharCode(65+ri(0,25))+'. '+pick(LAST);}while(usedNames.has(n)); usedNames.add(n); return n; }
+const TENURE = [null,[0,4],[1,8],[3,14],[5,20],[8,25]];
+const people = [];
+function mkPerson(dept, teamId, rk, mgr, loc){
+  const r = N[roleId[rk]];
+  const p = addNode('Person', newName(), {dept, role:r.id, team:teamId, mgr, loc, tenure:ri(...TENURE[r.sen]), perf:Number(wpick({2:1,3:5,4:3,5:1}))});
+  addEdge(p.id, r.id, 'HOLDS', {since: 2026 - ri(0, Math.min(p.tenure, 6))});
+  if(teamId!=null) addEdge(p.id, teamId, 'MEMBER_OF');
+  if(mgr!=null) addEdge(p.id, mgr, 'REPORTS_TO');
+  people.push(p); return p;
+}
+const ceo = mkPerson('EXEC', null, 'CEO', null, 'Amsterdam');
+const heads = {}; const teamsByDept = {};
+for(const d of DEPTS){
+  const head = mkPerson(d.key, null, 'HEAD_'+d.key, ceo.id, d.locs[0]);
+  heads[d.key] = head.id;
+  addEdge(head.id, deptNode[d.key], 'HEADS');
+  const nT = Math.round((d.hc-1)/11.5);
+  const members = d.hc - 1 - nT;
+  const sizes = new Array(nT).fill(Math.floor(members/nT));
+  { const rem = members - sizes.reduce((a,b)=>a+b,0); for(let i=0;i<rem;i++) sizes[i%nT]++; }
+  for(let i=0;i<nT*2;i++){ const a=ri(0,nT-1), b=ri(0,nT-1), m=ri(0,3); if(sizes[a]-m>=6){ sizes[a]-=m; sizes[b]+=m; } }
+  const tpls = TEAMS[d.key]; const seen = {};
+  teamsByDept[d.key] = [];
+  for(let t=0;t<nT;t++){
+    const tpl = tpls[t % tpls.length];
+    const loc = d.locs[(t + Math.floor(t/tpls.length)) % d.locs.length];
+    let name = tpl.n + ' · ' + loc; seen[name] = (seen[name]||0)+1; if(seen[name]>1) name += ' ' + ['','','II','III','IV','V','VI'][seen[name]];
+    const team = addNode('Team', name, {dept:d.key, loc});
+    addEdge(team.id, deptNode[d.key], 'PART_OF');
+    teamsByDept[d.key].push(team.id);
+    const lead = mkPerson(d.key, team.id, tpl.lead, head.id, loc);
+    team.lead = lead.id;
+    for(let i=0;i<sizes[t];i++) mkPerson(d.key, team.id, wpick(tpl.mix), lead.id, loc);
+  }
+}
+
+// ---------- careers, skills, learning, certificates ----------
+const NOISE = {'-2':1,'-1':3,'0':5,'1':2};
+const SOURCES = {'Inferred · LMS':3,'Inferred · performance review':2,'Inferred · work systems':2,'Self-declared (career profile)':3};
+const reqOf = rid => sOut(rid,'REQUIRES');
+const moveCount = {};
+for(const p of people){
+  // career history (previous roles), oldest first
+  const hist = [];
+  const curKey = N[p.role].key;
+  if(p.tenure>=3 && PREV[curKey] && rnd()<0.75){
+    const h1 = pick(PREV[curKey]); hist.unshift(h1);
+    if(p.tenure>=8 && PREV[h1] && rnd()<0.5) hist.unshift(pick(PREV[h1]));
+  }
+  p.history = hist.map(k=>roleId[k]);
+  p.history.forEach((rid,i)=>addEdge(p.id, rid, 'HELD', {until: 2026 - ri(1, 3) - (p.history.length-1-i)*ri(2,4)}));
+  const seq = p.history.concat([p.role]);
+  for(let i=0;i<seq.length-1;i++){ const k=seq[i]+'>'+seq[i+1]; moveCount[k]=(moveCount[k]||0)+1; }
+
+  // skills
+  const sk = {};
+  const add = (sid,l)=>{ l=clamp(Math.round(l),0,5); if(l<=0) return; if(sk[sid]===undefined || sk[sid]<l) sk[sid]=l; };
+  const bonus = (p.tenure>10?0.3:0) + (p.perf>=4?0.3:0);
+  for(const e of reqOf(p.role)) add(e.t, e.level + Number(wpick(NOISE)) + bonus + (SCARCE[N[e.t].name]||0));
+  for(const h of p.history) for(const e of reqOf(h)) add(e.t, e.level - 1 + Number(wpick(NOISE)) + (SCARCE[N[e.t].name]||0));
+  for(const s of sample(TRANS,2)) add(skillId[s], ri(1,3));
+  const cat = (deptByKey[p.dept].cat) || 'Transversal';
+  add(skillId[pick(SKILL_CATS[cat])], ri(1,3));
+  if(p.dept!=='DIT' && rnd()<0.06){ add(skillId.Python, ri(2,4)); add(skillId.SQL, ri(2,4)); add(skillId['Data Visualization'], ri(1,3)); if(rnd()<0.35) add(skillId['Machine Learning'], ri(2,3)); }
+  if(rnd()<0.07) add(skillId['Generative AI'], ri(1,2));
+  if(N[p.role].sen>=4){ for(const s of ['Strategic Thinking','Stakeholder Management','Change Management']) if(rnd()<0.75) add(skillId[s], ri(2,4) + (p.perf>=4?0.4:0)); }
+  for(const sid in sk){
+    const validated = rnd()<0.35;
+    const source = validated ? 'Manager-validated' : wpick(SOURCES);
+    const conf = validated ? 0.9 + rnd()*0.08 : 0.5 + rnd()*0.35;
+    addEdge(p.id, Number(sid), 'HAS_SKILL', {level:sk[sid], source, confidence:Math.round(conf*100)/100});
+  }
+  p.sk = sk;
+  // learning history (LMS)
+  for(const sid in sk){
+    const cs = courseFor[N[sid].name]; if(!cs) continue;
+    if(sk[sid]>=2 && rnd()<0.45) addEdge(p.id, cs[0], 'COMPLETED', {year:ri(2019,2026)});
+    if(cs[1] && sk[sid]>=4 && rnd()<0.5) addEdge(p.id, cs[1], 'COMPLETED', {year:ri(2021,2026)});
+  }
+  // certifications
+  for(const e of sOut(p.role,'REQUIRES_CERT')){
+    const r = rnd(); let exp = null;
+    if(r<0.80) exp = TODAY + ri(31,365)*DAY; else if(r<0.87) exp = TODAY + ri(0,30)*DAY; else if(r<0.95) exp = TODAY - ri(1,240)*DAY;
+    if(exp!==null) addEdge(p.id, e.t, 'CERTIFIED', {expires: iso(exp)});
+  }
+}
+for(const k in moveCount){ const [a,b]=k.split('>').map(Number); addEdge(a, b, 'MOVED_TO', {moves:moveCount[k]}); }
+
+// ---------- collaboration network (ONA) ----------
+const AFF = {ENG:{OPS:3,CS:3,RC:2,DIT:2,FIN:1,HR:1,SM:1}, CS:{ENG:3,SM:3,RC:1,DIT:1,HR:1,FIN:1}, SM:{CS:3,FIN:2,DIT:2,OPS:1,HR:1,ENG:1},
+  FIN:{SM:2,OPS:2,ENG:1,HR:1,DIT:1,RC:1,CS:1}, HR:{ENG:1,CS:1,SM:1,FIN:1,DIT:1,RC:1,OPS:1}, DIT:{OPS:2,ENG:2,SM:2,FIN:1,HR:1,RC:1},
+  RC:{OPS:4,ENG:2,DIT:1,CS:1}, OPS:{RC:4,ENG:2,DIT:2,FIN:1,SM:1,HR:1}};
+const BRIDGE = {PE:['ENG','RC','DIT'], ODA:['OPS','RC'], AUD:['OPS','ENG'], PM:['CS','DIT'], CSM:['SM','ENG'], SCSM:['ENG','SM'], CTRL:['SM','OPS','ENG'], HRBP:['ENG','OPS','SM','DIT'], PO:['OPS','SM','ENG'], SCP:['SM','FIN'], QAE:['DIT','CS'], OPSUP:['RC','ENG']};
+const membersOfTeam = {}; const peopleByDept = {};
+for(const p of people){ if(p.team!=null) (membersOfTeam[p.team]=membersOfTeam[p.team]||[]).push(p.id); if(p.team!=null) (peopleByDept[p.dept]=peopleByDept[p.dept]||[]).push(p.id); }
+const collabSeen = new Set();
+function collab(a,b){ if(a===b) return; const k=a<b?a+'-'+b:b+'-'+a; if(collabSeen.has(k)) return; collabSeen.add(k); addEdge(a,b,'COLLABORATES_WITH',{perMonth:ri(2,30)}); }
+for(const p of people){
+  if(p.team==null) continue;
+  const mates = membersOfTeam[p.team].filter(x=>x!==p.id);
+  for(const m of sample(mates, ri(2,4))) collab(p.id, m);
+  if(p.mgr!=null && rnd()<0.9) collab(p.id, p.mgr);
+  const sameDept = peopleByDept[p.dept];
+  for(let i=0;i<ri(0,2);i++) collab(p.id, pick(sameDept));
+  if(rnd()<0.2){ const d = wpick(AFF[p.dept]); collab(p.id, pick(peopleByDept[d])); }
+  const br = BRIDGE[N[p.role].key];
+  if(br && rnd()<0.4){ const k=ri(3,8); for(let i=0;i<k;i++) collab(p.id, pick(peopleByDept[pick(br)])); }
+}
+const headIds = Object.values(heads);
+for(const a of headIds){ collab(a, ceo.id); for(const b of headIds) if(a<b && rnd()<0.6) collab(a,b); }
+
+// ---------- derived node metadata ----------
+for(const n of N){
+  if(n.type==='Role') n.hc = sIn(n.id,'HOLDS').length;
+  if(n.type==='Skill') n.holders = sIn(n.id,'HAS_SKILL').length;
+  if(n.type==='Team') n.size = sIn(n.id,'MEMBER_OF').length;
+  if(n.type==='Department') n.size = (peopleByDept[n.key]||[]).length + 1;
+}
+
+// ---------- layout (fixed "galaxy" positions) ----------
+const DR = 400, SR = 690, GA = Math.PI*(3-Math.sqrt(5));
+const totS = DEPTS.reduce((a,d)=>a+Math.sqrt(d.hc),0);
+let a0 = -Math.PI/2 - Math.sqrt(DEPTS[0].hc)/totS*Math.PI;
+for(const d of DEPTS){
+  d.span = Math.sqrt(d.hc)/totS*2*Math.PI; d.a0=a0; d.a1=a0+d.span; d.ang=a0+d.span/2; a0+=d.span;
+  d.rc = Math.min(7.6*Math.sqrt(d.hc), DR*Math.sin(d.span/2)*0.92);
+  d.cx = DR*Math.cos(d.ang); d.cy = DR*Math.sin(d.ang);
+  const dn = N[deptNode[d.key]]; dn.x=d.cx; dn.y=d.cy;
+  const hd = N[heads[d.key]]; hd.x=d.cx; hd.y=d.cy;
+  const tl = teamsByDept[d.key];
+  tl.forEach((tid,j)=>{
+    const rr = d.rc*0.86*Math.sqrt((j+1.2)/(tl.length+1.2)); const an = d.ang + j*GA;
+    const t = N[tid]; t.x = d.cx + rr*Math.cos(an); t.y = d.cy + rr*Math.sin(an);
+    const mem = membersOfTeam[tid].slice().sort((a,b)=> (a===t.lead?-1:b===t.lead?1:0));
+    mem.forEach((pid,k)=>{ const r2 = 4.4*Math.sqrt(k+0.35); const a2 = k*GA + j; N[pid].x = t.x + r2*Math.cos(a2); N[pid].y = t.y + r2*Math.sin(a2); });
+  });
+  // roles on an arc just outside the cluster
+  const roles = N.filter(n=>n.type==='Role' && n.dept===d.key).sort((a,b)=>a.sen-b.sen);
+  roles.forEach((r,i)=>{ const f = roles.length===1?0.5:i/(roles.length-1); const an = d.ang + (f-0.5)*d.span*0.8; const rad = DR + d.rc + 42 + (i%2)*24; r.x=rad*Math.cos(an); r.y=rad*Math.sin(an); });
+  // skills of the department's category on the outer ring
+  const sks = SKILL_CATS[d.cat];
+  sks.forEach((s,i)=>{ const f = sks.length===1?0.5:i/(sks.length-1); const an = d.ang + (f-0.5)*d.span*0.84; const rad = SR + (i%2)*30; const n=N[skillId[s]]; n.x=rad*Math.cos(an); n.y=rad*Math.sin(an); n.ang=an; n.rad=rad; });
+}
+TRANS.forEach((s,i)=>{ const an = -Math.PI/2 + (i+0.5)/TRANS.length*2*Math.PI; const n=N[skillId[s]]; n.x=150*Math.cos(an); n.y=150*Math.sin(an); n.ang=an; n.rad=150; });
+ceo.x=0; ceo.y=0; const ceoRole = N[roleId.CEO]; ceoRole.x=0; ceoRole.y=34;
+for(const n of N){ if(n.type!=='Course') continue; const s=N[n.skill]; const inner = s.rad<200; const rad = inner ? (n.adv? 238 : 205) : s.rad + (n.adv? 104 : 64); const off = n.adv? 0.012 : -0.012; n.x = rad*Math.cos(s.ang+off); n.y = rad*Math.sin(s.ang+off); }
+{ const rad = SR + 175; const ms = deptByKey.OPS; const pos = {HS: ms.ang - ms.span*0.22, EQUIP: ms.ang + ms.span*0.22, DP: deptByKey.RC.ang};
+  for(const k in certId){ const n=N[certId[k]]; n.x=rad*Math.cos(pos[k]); n.y=rad*Math.sin(pos[k]); } }
+
+// ---------- query helpers ----------
+const esc = s => String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pct = v => Math.round(v*100)+'%';
+const roleOf = pid => out(pid,'HOLDS')[0].t;
+const SHORT = {ENG:'Product & Eng.',CS:'Customer Success',SM:'Sales & Mktg',FIN:'Finance',HR:'People & Culture',DIT:'Data & IT',RC:'Risk & Compliance',OPS:'Operations',EXEC:'Executive'};
+const deptName = k => deptByKey[k] ? deptByKey[k].name : k;
+const deptShort = k => SHORT[k] || deptName(k);
+function fitDetail(pid, reqs){
+  const have = new Map(out(pid,'HAS_SKILL').map(e=>[e.t,e]));
+  let num=0, den=0, met=0; const detail=[];
+  for(const r of reqs){ const h=have.get(r.t); const l=h?h.level:0; num+=Math.min(l,r.level); den+=r.level; if(l>=r.level) met++; detail.push({s:r.t, req:r.level, have:l, e:h}); }
+  return {fit: den? num/den : 0, met, n:reqs.length, detail, have};
+}
+const stColor = (have,req) => have>=req ? C.ok : have>0 ? C.warn : C.bad;
+const lineIdx = (lines, ...needles) => needles.map(nd => lines.findIndex(l=>l.includes(nd))).filter(i=>i>=0);
+const q = s => '"' + s + '"';
+
+// ---------- the queries ----------
+const QUERIES = [];
+
+QUERIES.push({ id:'gap', title:'Skills gap to a target role', tag:'MyCareer', params:['person','role'],
+  question: P => `What does ${N[P.person].name} still need to become ${N[P.role].name}?`,
+  advantage:['Low','A two-table join with a LEFT JOIN. Snowflake answers this just as well; the graph adds nothing here except reusing the same model.'],
+  cypher: P => [
+    `MATCH (p:Person {name: ${q(N[P.person].name)}})`,
+    `MATCH (target:Role {title: ${q(N[P.role].name)}})-[req:REQUIRES]->(s:Skill)`,
+    `OPTIONAL MATCH (p)-[has:HAS_SKILL]->(s)`,
+    `WITH s, req.level AS required, coalesce(has.level, 0) AS current, has.source AS evidence`,
+    `RETURN s.name AS skill, required, current, required - current AS gap, evidence`,
+    `ORDER BY gap DESC`],
+  sql: P => [
+    `SELECT s.name AS skill, rr.level AS required,`,
+    `       COALESCE(ps.level, 0) AS current,`,
+    `       rr.level - COALESCE(ps.level, 0) AS gap, ps.source AS evidence`,
+    `FROM role_requirement rr`,
+    `JOIN skill s ON s.skill_id = rr.skill_id`,
+    `LEFT JOIN person_skill ps`,
+    `  ON ps.skill_id = rr.skill_id AND ps.person_id = :person_id`,
+    `WHERE rr.role_id = :role_id`,
+    `ORDER BY gap DESC;`],
+  run(P){
+    const p=N[P.person], r=N[P.role], steps=[];
+    const cur = roleOf(p.id);
+    steps.push({title:'Find the person', detail:`Index seek on :Person(name) returns one node: ${p.name}, currently ${N[cur].name}.`, nodes:[p.id,cur], edges:[[p.id,cur,C.muted]], labels:[p.id,cur], line:[0]});
+    steps.push({title:'Find the target role', detail:`Index seek on :Role(title) returns ${r.name}.`, nodes:[r.id], labels:[r.id], line:[1]});
+    const req = out(r.id,'REQUIRES');
+    steps.push({title:'Expand REQUIRES', detail:`Follow the ${req.length} REQUIRES relationships stored on the role node. No table scan: the role points straight at its skills.`, nodes:req.map(e=>e.t), edges:req.map(e=>[r.id,e.t,C.role]), labels:req.map(e=>e.t), line:[1]});
+    const f = fitDetail(p.id, req);
+    const nodeColor={}, edges=[], rows=[];
+    for(const d of f.detail){ const col=stColor(d.have,d.req); nodeColor[d.s]=col; if(d.e) edges.push([p.id,d.s,col,1.6]);
+      rows.push({skill:N[d.s].name, level:{have:d.have,req:d.req}, gap:Math.max(0,d.req-d.have), evidence:d.e? d.e.source+' ('+pct(d.e.confidence)+')' : 'No evidence', _node:d.s}); }
+    const missing = f.detail.filter(d=>!d.e).length;
+    steps.push({title:'Match the person’s HAS_SKILL edges', detail:`Read the ${f.have.size} HAS_SKILL edges on ${p.name}. ${f.met} of ${req.length} requirements are met; ${missing} skill${missing===1?' has':'s have'} no evidence at all.`, nodes:req.map(e=>e.t), nodeColor, edges, line:[2], legend:'gap'});
+    rows.sort((a,b)=>b.gap-a.gap || b.level.req-a.level.req);
+    steps.push({title:'Compute gaps, return rows', detail:'gap = required − current, sorted by size.', nodes:[], line:[3,4,5]});
+    const top = rows.filter(r=>r.gap>0).slice(0,2).map(r=>esc(r.skill)).join(' and ');
+    return {steps, cols:[{k:'skill',l:'Skill'},{k:'level',l:'Has / required',t:'pips'},{k:'gap',l:'Gap',t:'num'},{k:'evidence',l:'Evidence (confidence)'}], rows,
+      foot:'Levels run 1–5; 0 = no evidence. Skill fit = sum of the person’s levels, each capped at the required level, ÷ sum of required levels.',
+      summary:`<b>${esc(p.name)}</b> meets <b>${f.met} of ${req.length}</b> requirements for <b>${esc(r.name)}</b> (skill fit ${pct(f.fit)}).` + (top? ` Biggest gaps: ${top}.`:' No gaps.') + ` Try <i>Learning path + mentors</i> next to see how to close them.`};
+  }});
+
+QUERIES.push({ id:'career', title:'Reachable career paths', tag:'MyCareer', params:['person'],
+  question: P => `Which roles have people actually moved to from ${N[P.person].name}’s current role, within two moves, and how well does ${N[P.person].name.split(' ')[0]} fit them?`,
+  advantage:['High','Variable-length paths over observed role transitions. In SQL you first derive a transitions table from job history, then write a recursive CTE; adding a third hop or a path constraint gets awkward fast.'],
+  cypher: P => [
+    `MATCH (p:Person {name: ${q(N[P.person].name)}})-[:HOLDS]->(current:Role)`,
+    `MATCH path = (current)-[:MOVED_TO*1..2]->(next:Role)`,
+    `WHERE next <> current`,
+    `WITH p, next, min(length(path)) AS hops,`,
+    `     max(reduce(m = 9999, r IN relationships(path) | CASE WHEN r.moves < m THEN r.moves ELSE m END)) AS observed_moves`,
+    `MATCH (next)-[req:REQUIRES]->(s:Skill)`,
+    `OPTIONAL MATCH (p)-[has:HAS_SKILL]->(s)`,
+    `WITH next, hops, observed_moves,`,
+    `     sum(CASE WHEN coalesce(has.level,0) < req.level THEN coalesce(has.level,0) ELSE req.level END) * 1.0 / sum(req.level) AS fit`,
+    `RETURN next.title, hops, observed_moves, fit`,
+    `ORDER BY fit DESC LIMIT 10`],
+  sql: P => [
+    `-- 1. derive role transitions from job history (window function)`,
+    `CREATE TEMP TABLE role_transition AS`,
+    `SELECT role_id AS from_role, next_role AS to_role, COUNT(*) AS moves FROM (`,
+    `  SELECT person_id, role_id,`,
+    `         LEAD(role_id) OVER (PARTITION BY person_id ORDER BY start_date) AS next_role`,
+    `  FROM job_history) WHERE next_role IS NOT NULL GROUP BY 1, 2;`,
+    `-- 2. walk up to two hops`,
+    `WITH RECURSIVE paths (role_id, hops, moves) AS (`,
+    `  SELECT t.to_role, 1, t.moves FROM role_transition t`,
+    `  JOIN employee e ON e.role_id = t.from_role WHERE e.person_id = :person_id`,
+    `  UNION ALL`,
+    `  SELECT t.to_role, p.hops + 1, LEAST(p.moves, t.moves)`,
+    `  FROM paths p JOIN role_transition t ON t.from_role = p.role_id`,
+    `  WHERE p.hops < 2)`,
+    `SELECT p.role_id, MIN(p.hops) AS hops, MAX(p.moves) AS observed_moves,`,
+    `       SUM(LEAST(COALESCE(ps.level,0), rr.level)) / SUM(rr.level) AS fit`,
+    `FROM (SELECT DISTINCT role_id, hops, moves FROM paths) p`,
+    `JOIN role_requirement rr ON rr.role_id = p.role_id`,
+    `LEFT JOIN person_skill ps ON ps.skill_id = rr.skill_id AND ps.person_id = :person_id`,
+    `GROUP BY p.role_id ORDER BY fit DESC LIMIT 10;`],
+  run(P){
+    const p=N[P.person], steps=[];
+    const cur = roleOf(p.id);
+    steps.push({title:'Start at the person’s current role', detail:`${p.name} → HOLDS → ${N[cur].name}.`, nodes:[p.id,cur], edges:[[p.id,cur,C.muted]], labels:[p.id,cur], line:[0]});
+    const cand = new Map();
+    const h1 = out(cur,'MOVED_TO').filter(e=>e.t!==cur);
+    for(const e of h1) cand.set(e.t,{hops:1, moves:e.moves, via:null});
+    steps.push({title:'Hop 1: follow MOVED_TO', detail: h1.length ? `${h1.length} roles that people have moved to directly from ${N[cur].name} (${h1.reduce((a,e)=>a+e.moves,0)} observed moves).` : `Nobody in the history has moved on from ${N[cur].name}.`, nodes:h1.map(e=>e.t), edges:h1.map(e=>[cur,e.t,C.role,1+Math.min(e.moves,12)/4]), labels:h1.map(e=>e.t), line:[1,2]});
+    const h2e = [];
+    for(const e of h1) for(const e2 of out(e.t,'MOVED_TO')){ if(e2.t===cur) continue; h2e.push([e.t,e2.t,C.role,1+Math.min(e2.moves,12)/4]); const m=Math.min(e.moves,e2.moves); const c=cand.get(e2.t); if(!c) cand.set(e2.t,{hops:2,moves:m,via:e.t}); else if(c.hops===2 && m>c.moves){ c.moves=m; c.via=e.t; } }
+    const h2n = [...new Set(h2e.map(x=>x[1]))].filter(id=>cand.get(id).hops===2);
+    steps.push({title:'Hop 2: follow MOVED_TO again', detail:`${h2n.length} more roles reachable in two moves.`, nodes:h2n, edges:h2e, labels:h2n, line:[1,3,4]});
+    const rows=[], reqEdges=[], skillNodes=new Set(), nodeColor={};
+    for(const [rid,c] of cand){ const req=out(rid,'REQUIRES'); const f=fitDetail(p.id, req); for(const d of f.detail){ reqEdges.push([rid,d.s,stColor(d.have,d.req),0.8]); skillNodes.add(d.s);}
+      const gaps = f.detail.filter(d=>d.have<d.req).sort((a,b)=>(b.req-b.have)-(a.req-a.have));
+      rows.push({role:N[rid].name, dept:deptShort(N[rid].dept), hops:c.hops, moves:c.moves, fit:f.fit, gap: gaps.length? N[gaps[0].s].name : '—', _node:rid}); }
+    steps.push({title:'Score each role against the person’s skills', detail:`Expand REQUIRES on ${cand.size} candidate roles and compare with ${p.name.split(' ')[0]}’s HAS_SKILL levels. Green = already met, amber = partly, red = missing.`, nodes:[...skillNodes], edges:reqEdges, line:[5,6,7,8], legend:'gap', edgeAlpha:0.55});
+    rows.sort((a,b)=>b.fit-a.fit || b.moves-a.moves);
+    const topR = rows.slice(0,10);
+    steps.push({title:'Rank and return', detail:'Order by skill fit, keep 10.', nodes:topR.map(r=>r._node), nodeColor, labels:topR.map(r=>r._node), line:[9,10]});
+    const best = topR[0];
+    return {steps, cols:[{k:'role',l:'Role'},{k:'fit',l:'Skill fit',t:'pct'},{k:'hops',l:'Steps',t:'num'},{k:'moves',l:'Observed moves',t:'num'},{k:'gap',l:'Biggest gap'},{k:'dept',l:'Department'}], rows:topR,
+      foot:'Steps = role changes needed. Observed moves = people in the job history who made that move; for two-step paths, the count on the weaker of the two links. Skill fit = sum of the person’s levels, each capped at the required level, ÷ sum of required levels.',
+      summary: best ? `From <b>${esc(N[cur].name)}</b>, ${cand.size} roles are reachable in one or two observed moves. Best fit for ${esc(p.name)}: <b>${esc(best.role)}</b> (${pct(best.fit)}). Paths come from real moves in the job history, not from an org chart.` : `No observed moves out of ${esc(N[cur].name)} yet, so the graph has no evidence-based paths. Pick another person.`};
+  }});
+
+QUERIES.push({ id:'talent', title:'Internal talent for a role', tag:'Talent mobility', params:['role'],
+  question: P => `Who across the company could step into ${N[P.role].name}, based on skills rather than job titles?`,
+  advantage:['Low–Medium','A join plus GROUP BY. Fine in SQL. The graph helps when you keep pivoting: from a candidate to their manager, their courses, their network.'],
+  cypher: P => [
+    `MATCH (target:Role {title: ${q(N[P.role].name)}})-[req:REQUIRES]->(s:Skill)`,
+    `WITH target, sum(req.level) AS total`,
+    `MATCH (target)-[req:REQUIRES]->(s:Skill)<-[has:HAS_SKILL]-(p:Person)`,
+    `WHERE NOT (p)-[:HOLDS]->(target)`,
+    `WITH p, total,`,
+    `     sum(CASE WHEN has.level < req.level THEN has.level ELSE req.level END) * 1.0 / total AS fit,`,
+    `     sum(CASE WHEN has.level >= req.level THEN 1 ELSE 0 END) AS met`,
+    `WHERE fit >= 0.7`,
+    `MATCH (p)-[:HOLDS]->(current:Role)`,
+    `RETURN p.name, current.title, p.department, fit, met`,
+    `ORDER BY fit DESC LIMIT 12`],
+  sql: P => [
+    `WITH req AS (SELECT skill_id, level FROM role_requirement WHERE role_id = :role_id),`,
+    `total AS (SELECT SUM(level) AS t FROM req)`,
+    `SELECT e.person_id, e.role_id AS current_role, e.department,`,
+    `       SUM(LEAST(ps.level, req.level)) / MAX(total.t) AS fit,`,
+    `       SUM(IFF(ps.level >= req.level, 1, 0)) AS met`,
+    `FROM req JOIN person_skill ps ON ps.skill_id = req.skill_id`,
+    `JOIN employee e ON e.person_id = ps.person_id CROSS JOIN total`,
+    `WHERE e.role_id <> :role_id`,
+    `GROUP BY 1, 2, 3 HAVING fit >= 0.7`,
+    `ORDER BY fit DESC LIMIT 12;`],
+  run(P){
+    const r=N[P.role], steps=[];
+    steps.push({title:'Find the role', detail:`Index seek: ${r.name} (${r.hc} people hold it today).`, nodes:[r.id], labels:[r.id], line:[0]});
+    const req = out(r.id,'REQUIRES'); const total = req.reduce((a,e)=>a+e.level,0);
+    steps.push({title:'Expand REQUIRES', detail:`${req.length} required skills, total required level ${total}.`, nodes:req.map(e=>e.t), edges:req.map(e=>[r.id,e.t,C.role]), labels:req.map(e=>e.t), line:[0,1]});
+    const incumbents = new Set(inn(r.id,'HOLDS').map(e=>e.s));
+    const agg = new Map(); const fan=[];
+    for(const e of req){ for(const h of inn(e.t,'HAS_SKILL')){ fan.push([h.s,e.t,C.person,0.6]); if(incumbents.has(h.s)) continue; let a=agg.get(h.s); if(!a){a={num:0,met:0,val:0};agg.set(h.s,a);} a.num+=Math.min(h.level,e.level); if(h.level>=e.level){a.met++; if(h.source==='Manager-validated') a.val++;} } }
+    steps.push({title:'Walk backwards: Skill ← HAS_SKILL ← Person', detail:`${fan.length.toLocaleString('en')} HAS_SKILL edges point into those skills, from ${agg.size + incumbents.size} different people. This is the expensive step, and it only touches people who hold at least one relevant skill.`, nodes:[...new Set(fan.map(x=>x[0]))], edges:fan, line:[2,3], edgeAlpha:0.22, dimNodes:true});
+    const list = [...agg.entries()].map(([pid,a])=>({pid, fit:a.num/total, met:a.met, val:a.val})).filter(x=>x.fit>=0.7).sort((a,b)=>b.fit-a.fit || b.val-a.val);
+    const top = list.slice(0,12);
+    const edges=[], nodeColor={};
+    for(const c of top){ for(const e of req){ const lv=N[c.pid].sk[e.t]||0; if(lv) edges.push([c.pid,e.t,stColor(lv,e.level),1.2]); } nodeColor[c.pid]=C.person; }
+    steps.push({title:'Aggregate per person, keep fit ≥ 70%', detail:`${list.length} people clear the bar; the top 12 are shown with their skill evidence.`, nodes:top.map(c=>c.pid), nodeColor, edges, labels:top.map(c=>c.pid), line:[4,5,6,7], legend:'gap'});
+    const hEdges = top.map(c=>[c.pid, N[c.pid].role, C.muted, 0.8]);
+    steps.push({title:'Look up their current roles', detail:'One HOLDS hop per candidate.', nodes:top.map(c=>N[c.pid].role), edges:hEdges, labels:[...new Set(top.map(c=>N[c.pid].role))], line:[8,9,10]});
+    const rows = top.map(c=>({name:N[c.pid].name, current:N[N[c.pid].role].name, dept:deptShort(N[c.pid].dept), fit:c.fit, met:`${c.met}/${req.length}`, _node:c.pid}));
+    const outside = top.filter(c=>N[c.pid].dept!==r.dept).length;
+    return {steps, cols:[{k:'name',l:'Person'},{k:'fit',l:'Skill fit',t:'pct'},{k:'met',l:'Requirements met',t:'num'},{k:'current',l:'Current role'},{k:'dept',l:'Department'}], rows,
+      foot:'Skill fit = sum of the person’s levels, each capped at the required level, ÷ sum of required levels. The 70% cut-off is a demo assumption, not an agreed rule.',
+      summary:`<b>${list.length}</b> people outside the current ${r.hc} ${esc(r.name)}s reach ≥70% skill fit. <b>${outside} of the top ${top.length}</b> sit outside ${esc(deptName(r.dept))}: candidates a search by job title alone would not return.`};
+  }});
+
+QUERIES.push({ id:'learn', title:'Learning path + mentors', tag:'Learning', params:['person','role'],
+  question: P => `Which courses (with prerequisites) and which colleagues could help ${N[P.person].name} close the gap to ${N[P.role].name}?`,
+  advantage:['High','Prerequisite chains of unknown depth plus a mentor lookup in one pattern. Recursive SQL can do it, but it is brittle and hard to read.'],
+  cypher: P => [
+    `MATCH (p:Person {name: ${q(N[P.person].name)}}), (target:Role {title: ${q(N[P.role].name)}})`,
+    `MATCH (target)-[req:REQUIRES]->(s:Skill)`,
+    `OPTIONAL MATCH (p)-[has:HAS_SKILL]->(s)`,
+    `WITH p, s, req WHERE coalesce(has.level, 0) < req.level`,
+    `OPTIONAL MATCH (c:Course)-[t:TEACHES]->(s) WHERE t.up_to >= req.level`,
+    `OPTIONAL MATCH (c)-[:REQUIRES_COURSE*0..3]->(pre:Course)`,
+    `WHERE NOT (p)-[:COMPLETED]->(pre)`,
+    `OPTIONAL MATCH (mentor:Person)-[m:HAS_SKILL]->(s)`,
+    `WHERE m.level >= 4 AND mentor.location = p.location AND mentor <> p`,
+    `RETURN s.name, collect(DISTINCT pre.title) AS courses,`,
+    `       collect(DISTINCT mentor.name)[0..2] AS mentors`],
+  sql: P => [
+    `WITH RECURSIVE gaps AS (`,
+    `  SELECT rr.skill_id, rr.level FROM role_requirement rr`,
+    `  LEFT JOIN person_skill ps ON ps.skill_id = rr.skill_id AND ps.person_id = :person_id`,
+    `  WHERE rr.role_id = :role_id AND COALESCE(ps.level, 0) < rr.level),`,
+    `chain (course_id, depth) AS (`,
+    `  SELECT ct.course_id, 0 FROM course_teaches ct JOIN gaps g`,
+    `    ON g.skill_id = ct.skill_id AND ct.up_to >= g.level`,
+    `  UNION ALL`,
+    `  SELECT cp.prereq_id, c.depth + 1 FROM chain c`,
+    `  JOIN course_prereq cp ON cp.course_id = c.course_id WHERE c.depth < 3)`,
+    `SELECT DISTINCT course_id, MAX(depth) AS depth FROM chain`,
+    `WHERE course_id NOT IN (SELECT course_id FROM completion WHERE person_id = :person_id)`,
+    `GROUP BY 1 ORDER BY depth DESC;`,
+    `-- mentors need a second query (person_skill JOIN employee ON location)`],
+  run(P){
+    const p=N[P.person], r=N[P.role], steps=[];
+    const req = out(r.id,'REQUIRES'); const f = fitDetail(p.id, req);
+    const gaps = f.detail.filter(d=>d.have<d.req);
+    const nodeColor={}; f.detail.forEach(d=>nodeColor[d.s]=stColor(d.have,d.req));
+    steps.push({title:'Find the gaps', detail:`${p.name} vs ${r.name}: ${gaps.length} skill${gaps.length===1?'':'s'} below the required level.`, nodes:[p.id,r.id,...req.map(e=>e.t)], nodeColor, edges:req.map(e=>[r.id,e.t,nodeColor[e.t],1]), labels:[p.id,r.id,...gaps.map(d=>d.s)], line:[0,1,2,3], legend:'gap'});
+    const done = new Set(out(p.id,'COMPLETED').map(e=>e.t));
+    const chosen = []; const cEdges=[]; const noCourse=[];
+    for(const g of gaps){ const cs = inn(g.s,'TEACHES'); if(!cs.length){ noCourse.push(g.s); continue; }
+      cs.sort((a,b)=>a.upTo-b.upTo); const pickC = cs.find(e=>e.upTo>=g.req) || cs[cs.length-1];
+      chosen.push({c:pickC.s, s:g.s}); cEdges.push([pickC.s,g.s,C.course,1.4]); }
+    steps.push({title:'Skill ← TEACHES ← Course', detail:`${chosen.length} courses teach the missing skills to the required level.` + (noCourse.length? ` ${noCourse.length} gap${noCourse.length===1?' has':'s have'} no course in the catalog (${noCourse.map(s=>N[s].name).join(', ')}).`:''), nodes:chosen.map(x=>x.c), edges:cEdges, labels:chosen.map(x=>x.c), line:[4]});
+    // prerequisites, depth-first, post-order = valid study order
+    const order=[]; const seen=new Set(); const pEdges=[]; const pNodes=[]; const why={};
+    function visit(cid, depth){ if(seen.has(cid)) return; seen.add(cid); for(const e of out(cid,'REQUIRES_COURSE')){ pEdges.push([cid,e.t,C.course,1,true]); pNodes.push(e.t); if(!why[e.t]) why[e.t]='Prerequisite for '+N[cid].name; visit(e.t, depth+1); } order.push(cid); }
+    for(const x of chosen){ why[x.c]='Closes '+N[x.s].name; visit(x.c,0); }
+    const pc = {}; pNodes.forEach(id=>pc[id]= done.has(id)? C.ok : C.course);
+    steps.push({title:'Follow REQUIRES_COURSE*0..3', detail:`Prerequisite chains add ${new Set(pNodes).size} course${new Set(pNodes).size===1?'':'s'}; ${order.filter(c=>done.has(c)).length} already completed (green).`, nodes:pNodes, nodeColor:pc, edges:pEdges, labels:pNodes, line:[5,6]});
+    const mentors={}; const mEdges=[]; const mNodes=[];
+    for(const g of gaps){ const cands = inn(g.s,'HAS_SKILL').filter(e=>e.level>=4 && e.s!==p.id);
+      cands.sort((a,b)=> (N[b.s].loc===p.loc)-(N[a.s].loc===p.loc) || (b.source==='Manager-validated')-(a.source==='Manager-validated') || b.level-a.level);
+      const m = cands[0]; if(m){ mentors[g.s]=m.s; mEdges.push([m.s,g.s,C.person,1.2]); mNodes.push(m.s);} }
+    steps.push({title:'Find mentors: Skill ← HAS_SKILL {level ≥ 4}', detail:`Prefer experts in ${p.loc} with manager-validated evidence.`, nodes:mNodes, edges:mEdges, labels:mNodes, line:[7,8]});
+    const rows=[]; let hours=0, i=0;
+    for(const cid of order){ const c=N[cid]; const isDone=done.has(cid); if(!isDone) hours+=c.hours; const ms=N[c.skill];
+      rows.push({n:isDone?'✓':String(++i), course:c.name, why:why[cid]||'', hours:isDone? 'done' : c.hours+' h', mentor: mentors[c.skill]!=null ? N[mentors[c.skill]].name : '—', _node:cid}); }
+    for(const s of noCourse) rows.push({n:'·', course:'No catalog course', why:'Closes '+N[s].name, hours:'on the job', mentor: mentors[s]!=null? N[mentors[s]].name : '—', _node: mentors[s]!=null? mentors[s] : s});
+    steps.push({title:'Order by prerequisites, return plan', detail:'Post-order traversal gives a valid study sequence.', nodes:[], line:[9,10]});
+    return {steps, cols:[{k:'n',l:'Order'},{k:'course',l:'Course'},{k:'why',l:'Why'},{k:'hours',l:'Effort'},{k:'mentor',l:'Mentor'}], rows,
+      foot:'✓ = already completed. Mentors hold the skill at level 4–5; same location and manager-validated evidence are preferred.',
+      summary: gaps.length ? `<b>${i} course${i===1?'':'s'}, about ${hours} hours</b>, plus ${Object.keys(mentors).length} mentor${Object.keys(mentors).length===1?'':'s'} for ${gaps.length} gap${gaps.length===1?'':'s'}.` + (noCourse.length? ` <b>${noCourse.length}</b> gap${noCourse.length===1?'':'s'} can only be closed on the job, which also flags a hole in the course catalog.`:'') : `${esc(p.name)} already meets every requirement for ${esc(r.name)}.`};
+  }});
+
+QUERIES.push({ id:'succession', title:'Succession bench', tag:'Succession', params:['leader'],
+  question: P => `Who could succeed ${N[P.leader].name} (${N[N[P.leader].role].name}), inside and outside the reporting line?`,
+  advantage:['Medium','A recursive CTE on the reporting line works in Snowflake. The graph version stays short when you add matrix or dotted-line reporting, or search beyond the line.'],
+  cypher: P => [
+    `MATCH (leader:Person {name: ${q(N[P.leader].name)}})-[:HOLDS]->(r:Role)`,
+    `MATCH (c:Person)-[:REPORTS_TO*1..3]->(leader)`,
+    `MATCH (r)-[req:REQUIRES]->(s:Skill)`,
+    `OPTIONAL MATCH (c)-[has:HAS_SKILL]->(s)`,
+    `WITH c, sum(CASE WHEN coalesce(has.level,0) < req.level THEN coalesce(has.level,0) ELSE req.level END) * 1.0 / sum(req.level) AS fit`,
+    `RETURN c.name, fit, c.performance,`,
+    `  CASE WHEN fit >= 0.8 AND c.performance >= 4 THEN 'Ready now'`,
+    `       WHEN fit >= 0.65 THEN 'Ready in 1–2 years' END AS readiness`,
+    `UNION // beyond the reporting line`,
+    `MATCH (leader)-[:HOLDS]->(r)-[req:REQUIRES {core: true}]->(:Skill)<-[has:HAS_SKILL]-(ext:Person)`,
+    `WHERE has.level >= req.level AND NOT (ext)-[:REPORTS_TO*1..3]->(leader) AND ext <> leader`,
+    `...same fit calculation...`],
+  sql: P => [
+    `WITH RECURSIVE tree (person_id, depth) AS (`,
+    `  SELECT person_id, 1 FROM employee WHERE manager_id = :leader_id`,
+    `  UNION ALL`,
+    `  SELECT e.person_id, t.depth + 1 FROM employee e`,
+    `  JOIN tree t ON e.manager_id = t.person_id WHERE t.depth < 3)`,
+    `SELECT t.person_id, t.depth,`,
+    `       SUM(LEAST(COALESCE(ps.level,0), rr.level)) / SUM(rr.level) AS fit`,
+    `FROM tree t`,
+    `CROSS JOIN role_requirement rr`,
+    `LEFT JOIN person_skill ps ON ps.person_id = t.person_id AND ps.skill_id = rr.skill_id`,
+    `WHERE rr.role_id = (SELECT role_id FROM employee WHERE person_id = :leader_id)`,
+    `GROUP BY 1, 2 ORDER BY fit DESC;`,
+    `-- "beyond the line" = a second query with an anti-join on tree`],
+  run(P){
+    const L=N[P.leader], steps=[];
+    const rid = roleOf(L.id);
+    steps.push({title:'Find the leader and their role', detail:`${L.name} holds ${N[rid].name}.`, nodes:[L.id,rid], edges:[[L.id,rid,C.muted]], labels:[L.id,rid], line:[0]});
+    const depth = new Map(); let frontier=[L.id];
+    for(let d=1; d<=3; d++){
+      const next=[], ed=[];
+      for(const x of frontier) for(const e of inn(x,'REPORTS_TO')){ if(depth.has(e.s)) continue; depth.set(e.s,d); next.push(e.s); ed.push([e.s,x,C.person,0.9]); }
+      if(!next.length) break;
+      steps.push({title:`REPORTS_TO, level ${d}`, detail:`${next.length} people ${d===1?'report directly':'sit '+d+' levels down'}.`, nodes:next, edges:ed, line:[1], labels: next.length<=12? next : [], edgeAlpha: next.length>150?0.45:0.8});
+      frontier = next;
+    }
+    const req = out(rid,'REQUIRES');
+    const scored = [...depth.keys()].map(pid=>{ const f=fitDetail(pid, req); return {pid, fit:f.fit, perf:N[pid].perf, d:depth.get(pid)}; });
+    const readiness = x => x.fit>=0.8 && x.perf>=4 ? 'Ready now' : x.fit>=0.65 ? 'Ready in 1–2 years' : null;
+    const bench = scored.filter(x=>readiness(x)).sort((a,b)=>b.fit-a.fit || b.perf-a.perf);
+    const nodeColor={}; bench.forEach(x=>nodeColor[x.pid]= readiness(x)==='Ready now'? C.ok : C.warn);
+    steps.push({title:'Score everyone in the line against the role', detail:`Compare ${scored.length} people with the ${req.length} requirements of ${N[rid].name}. ${bench.filter(x=>readiness(x)==='Ready now').length} ready now (green), ${bench.filter(x=>readiness(x)!=='Ready now').length} ready in 1–2 years (amber).`, nodes:bench.map(x=>x.pid), nodeColor, labels:bench.slice(0,8).map(x=>x.pid), line:[2,3,4,5,6,7], legend:'ready'});
+    // beyond the line
+    const core = req.filter(e=>e.core); const inTree = depth; const ext=new Map(); const fan=[];
+    for(const e of core) for(const h of inn(e.t,'HAS_SKILL')){ if(h.level<e.level || inTree.has(h.s) || h.s===L.id) continue; ext.set(h.s,(ext.get(h.s)||0)+1); }
+    const extScored = [...ext.keys()].filter(pid=>ext.get(pid)>=2).map(pid=>{ const f=fitDetail(pid, req); return {pid, fit:f.fit, perf:N[pid].perf, d:0}; }).filter(x=>x.fit>=0.8 && x.perf>=4).sort((a,b)=>b.fit-a.fit).slice(0,5);
+    for(const x of extScored) for(const e of core){ const lv=N[x.pid].sk[e.t]||0; if(lv>=e.level) fan.push([x.pid,e.t,C.ok,1.2]); }
+    const ec={}; extScored.forEach(x=>ec[x.pid]=C.ok);
+    steps.push({title:'Beyond the reporting line', detail:`Walk backwards from the role’s core skills to people elsewhere with ≥ 80% fit and strong performance: ${extScored.length} found.`, nodes:[...extScored.map(x=>x.pid), ...core.map(e=>e.t)], nodeColor:ec, edges:fan, labels:[...extScored.map(x=>x.pid), ...core.map(e=>e.t)], line:[8,9,10,11]});
+    const rel = d => d===1?'Direct report': d===2?'Skip-level': d===3?'3 levels down':'Other part of org';
+    const rows = bench.slice(0,10).concat(extScored).map(x=>({name:N[x.pid].name, current:N[N[x.pid].role].name, rel:rel(x.d), fit:x.fit, perf:x.perf, ready:{text: x.d===0? 'Ready now · external to line' : readiness(x), cls: (x.d===0||readiness(x)==='Ready now')?'ok':'warn'}, _node:x.pid}));
+    const now = bench.filter(x=>readiness(x)==='Ready now').length;
+    return {steps, cols:[{k:'name',l:'Candidate'},{k:'ready',l:'Readiness',t:'pill'},{k:'fit',l:'Skill fit',t:'pct'},{k:'perf',l:'Performance (1–5)',t:'num'},{k:'rel',l:'Relation'},{k:'current',l:'Current role'}], rows,
+      foot:'Skill fit = sum of the person’s levels, each capped at the required level, ÷ sum of required levels. Readiness rule (demo assumption): ready now = fit ≥ 80% and performance ≥ 4; ready in 1–2 years = fit ≥ 65%. In production, performance data would need role-based access.',
+      summary:`Bench for <b>${esc(N[rid].name)}</b>: <b>${now} ready now</b> and ${bench.length-now} ready in 1–2 years inside the line, plus <b>${extScored.length}</b> strong match${extScored.length===1?'':'es'} elsewhere in the company.` + (now===0? ' A thin internal bench is a finding in itself.' : '')};
+  }});
+
+QUERIES.push({ id:'ona', title:'Who bridges two departments?', tag:'ONA', params:['deptA','deptB'],
+  question: P => `Which people carry the collaboration between ${N[P.deptA].name} and ${N[P.deptB].name}?`,
+  advantage:['Medium','One-hop ties are fine in SQL. A graph engine pays off for network algorithms such as betweenness or community detection. This demo uses a plain tie count.'],
+  cypher: P => [
+    `MATCH (:Department {name: ${q(N[P.deptA].name)}})<-[:PART_OF]-(:Team)<-[:MEMBER_OF]-(a:Person)`,
+    `MATCH (:Department {name: ${q(N[P.deptB].name)}})<-[:PART_OF]-(:Team)<-[:MEMBER_OF]-(b:Person)`,
+    `MATCH (a)-[c:COLLABORATES_WITH]-(b)`,
+    `UNWIND [a, b] AS broker`,
+    `RETURN broker.name, broker.department, count(DISTINCT c) AS cross_ties`,
+    `ORDER BY cross_ties DESC LIMIT 10`,
+    `// production: CALL gds.betweenness.stream(...) on the collaboration projection`],
+  sql: P => [
+    `SELECT broker_id, COUNT(DISTINCT tie_id) AS cross_ties FROM (`,
+    `  SELECT c.tie_id, c.person_a AS broker_id FROM collaboration c`,
+    `  JOIN employee a ON a.person_id = c.person_a JOIN employee b ON b.person_id = c.person_b`,
+    `  WHERE (a.dept = :A AND b.dept = :B) OR (a.dept = :B AND b.dept = :A)`,
+    `  UNION ALL`,
+    `  SELECT c.tie_id, c.person_b FROM collaboration c`,
+    `  JOIN employee a ON a.person_id = c.person_a JOIN employee b ON b.person_id = c.person_b`,
+    `  WHERE (a.dept = :A AND b.dept = :B) OR (a.dept = :B AND b.dept = :A))`,
+    `GROUP BY 1 ORDER BY cross_ties DESC LIMIT 10;`],
+  run(P){
+    const A=N[P.deptA], B=N[P.deptB], steps=[];
+    if(A.id===B.id){ steps.push({title:'Find the department', detail:`${A.name} was chosen twice.`, nodes:[A.id], labels:[A.id], line:[0]}); return {steps, cols:[], rows:[], summary:'Pick two <b>different</b> departments to see who connects them.'}; }
+    function members(D,col){ const ppl=[], ed=[]; for(const t of inn(D.id,'PART_OF')){ ed.push([t.s,D.id,C.team,0.7]); for(const m of inn(t.s,'MEMBER_OF')){ ppl.push(m.s); ed.push([m.s,t.s,col,0.5]); } } return {ppl, ed}; }
+    const ma = members(A,C.deptA), mb = members(B,C.deptB);
+    const nca={}; ma.ppl.forEach(id=>nca[id]=C.deptA); const ncb={}; mb.ppl.forEach(id=>ncb[id]=C.deptB);
+    const ona = [[C.deptA, A.name],[C.deptB, B.name],[C.link,'Cross-department tie'],[C.focus,'Top-5 broker and their ties']];
+    steps.push({title:`Members of ${A.name}`, detail:`Department ← PART_OF ← Team ← MEMBER_OF ← Person: ${ma.ppl.length} people.`, nodes:[A.id,...ma.ppl], nodeColor:nca, edges:ma.ed, labels:[A.id], line:[0], edgeAlpha:0.35, legend:ona.slice(0,1)});
+    steps.push({title:`Members of ${B.name}`, detail:`Same pattern: ${mb.ppl.length} people.`, nodes:[B.id,...mb.ppl], nodeColor:ncb, edges:mb.ed, labels:[B.id], line:[1], edgeAlpha:0.35, legend:ona.slice(0,2)});
+    const setB = new Set(mb.ppl); const ties=new Map(); const cnt=new Map();
+    for(const a of ma.ppl) for(const {e,o} of both(a,'COLLABORATES_WITH')){ if(!setB.has(o)) continue; ties.set(e.id,e); for(const x of [a,o]){ if(!cnt.has(x)) cnt.set(x,new Set()); cnt.get(x).add(e.id);} }
+    const tieEdges = [...ties.values()].map(e=>[e.s,e.t,C.link,1]);
+    steps.push({title:'Expand COLLABORATES_WITH across the boundary', detail:`${ties.size} collaboration ties connect the two departments (from ${ma.ppl.length} × ${mb.ppl.length} possible pairs).`, nodes:[...cnt.keys()], edges:tieEdges, line:[2], edgeAlpha:0.75, legend:ona.slice(0,3)});
+    const ranked = [...cnt.entries()].map(([pid,s])=>({pid,n:s.size})).sort((a,b)=>b.n-a.n);
+    const top = ranked.slice(0,10); const top5 = new Set(ranked.slice(0,5).map(x=>x.pid));
+    const via5 = [...ties.values()].filter(e=>top5.has(e.s)||top5.has(e.t)).length;
+    const zeroA = ma.ppl.filter(id=>!cnt.has(id)).length;
+    const nc={}; top.slice(0,5).forEach(x=>nc[x.pid]=C.focus);
+    const topEdges = [...ties.values()].filter(e=>top5.has(e.s)||top5.has(e.t)).map(e=>[e.s,e.t,C.focus,1.4]);
+    steps.push({title:'Rank brokers by cross-department ties', detail:`The top 5 people sit on ${via5} of ${ties.size} ties (${ties.size?pct(via5/ties.size):'0%'}).`, nodes:top.map(x=>x.pid), nodeColor:nc, edges:topEdges, labels:top.map(x=>x.pid), line:[3,4,5,6], legend:ona});
+    const rows = top.map(x=>({name:N[x.pid].name, dept:deptShort(N[x.pid].dept), role:N[N[x.pid].role].name, ties:x.n, share:ties.size? x.n/ties.size : 0, _node:x.pid}));
+    return {steps, cols:[{k:'name',l:'Person'},{k:'dept',l:'Department'},{k:'role',l:'Role'},{k:'ties',l:'Cross-dept. ties',t:'num'},{k:'share',l:'% of all ties',t:'pct'}], rows,
+      foot:'A tie is a pair of people who collaborate. Each tie has two ends, so the % column does not add up to 100%. Collaboration data in production would come from aggregated Teams/e-mail metadata and needs works-council and data-protection approval.',
+      summary:`<b>${ties.size}</b> ties link ${esc(A.name)} and ${esc(B.name)}. The top 5 brokers sit on <b>${ties.size?pct(via5/ties.size):'0%'}</b> of them; without them ${ties.size-via5} ties would remain. ${zeroA} of ${ma.ppl.length} people in ${esc(A.name)} have no tie to ${esc(B.name)}.`};
+  }});
+
+QUERIES.push({ id:'compliance', title:'Certification gaps', tag:'Compliance', params:[],
+  question: () => `Who holds a role that requires a certification they don’t have, have let expire, or will lose within 30 days of 18 Nov 2026?`,
+  advantage:['Low','A plain join with date logic. Keep this one in Snowflake; it is shown here because the same graph model answers it too.'],
+  cypher: () => [
+    `MATCH (c:Certification)<-[:REQUIRES_CERT]-(r:Role)<-[:HOLDS]-(p:Person)`,
+    `OPTIONAL MATCH (p)-[cert:CERTIFIED]->(c)`,
+    `WITH p, r, c, cert.expires AS expires,`,
+    `     CASE WHEN cert IS NULL THEN 'Missing'`,
+    `          WHEN cert.expires < date() THEN 'Expired'`,
+    `          WHEN cert.expires < date() + duration('P30D') THEN 'Expires ≤ 30 days'`,
+    `          ELSE 'Valid' END AS status`,
+    `WHERE status <> 'Valid'`,
+    `OPTIONAL MATCH (p)-[:MEMBER_OF]->(t:Team)`,
+    `RETURN p.name, t.name, r.title, c.name, status, expires`,
+    `ORDER BY status, expires`],
+  sql: () => [
+    `SELECT e.name, t.name AS team, r.title, c.name AS certification,`,
+    `  CASE WHEN pc.person_id IS NULL THEN 'Missing'`,
+    `       WHEN pc.expires < CURRENT_DATE THEN 'Expired'`,
+    `       WHEN pc.expires < DATEADD(day, 30, CURRENT_DATE) THEN 'Expires <= 30 days'`,
+    `  END AS status, pc.expires`,
+    `FROM employee e JOIN role r ON r.role_id = e.role_id`,
+    `JOIN role_certification rc ON rc.role_id = r.role_id`,
+    `JOIN certification c ON c.cert_id = rc.cert_id`,
+    `LEFT JOIN team t ON t.team_id = e.team_id`,
+    `LEFT JOIN person_certification pc ON pc.person_id = e.person_id AND pc.cert_id = c.cert_id`,
+    `WHERE status IS NOT NULL ORDER BY status, pc.expires;`],
+  run(){
+    const steps=[]; const certs = N.filter(n=>n.type==='Certification');
+    steps.push({title:'Find certification nodes', detail:certs.map(c=>c.name).join(', ')+'.', nodes:certs.map(c=>c.id), labels:certs.map(c=>c.id), line:[0]});
+    const rEdges=[], roles=[];
+    for(const c of certs) for(const e of inn(c.id,'REQUIRES_CERT')){ rEdges.push([e.s,c.id,C.cert,1.2]); roles.push(e.s); }
+    steps.push({title:'Roles ← REQUIRES_CERT', detail:`${new Set(roles).size} roles require at least one certification.`, nodes:roles, edges:rEdges, labels:[...new Set(roles)], line:[0]});
+    const pairs=[]; const hEdges=[];
+    for(const rid of new Set(roles)){ const need = out(rid,'REQUIRES_CERT').map(e=>e.t); for(const h of inn(rid,'HOLDS')){ hEdges.push([h.s,rid,C.muted,0.5]); for(const c of need) pairs.push({p:h.s, c, r:rid}); } }
+    steps.push({title:'People ← HOLDS those roles', detail:`${new Set(pairs.map(x=>x.p)).size} people, ${pairs.length} person–certification requirements to check.`, nodes:[...new Set(pairs.map(x=>x.p))], edges:hEdges, line:[0], edgeAlpha:0.3, dimNodes:true});
+    const issues=[]; const cEdges=[]; const nodeColor={};
+    const rank={'Missing':0,'Expired':1,'Expires ≤ 30 days':2};
+    for(const x of pairs){ const ce = out(x.p,'CERTIFIED').find(e=>e.t===x.c); let st='Valid';
+      if(!ce) st='Missing'; else { const ms = Date.parse(ce.expires+'T00:00:00Z'); if(ms<TODAY) st='Expired'; else if(ms<TODAY+30*DAY) st='Expires ≤ 30 days'; }
+      if(st==='Valid'){ cEdges.push([x.p,x.c,C.muted,0.4]); continue; }
+      const col = st==='Expires ≤ 30 days'? C.warn : C.bad; cEdges.push([x.p,x.c,col,1.3, st==='Missing']);
+      if(!nodeColor[x.p] || col===C.bad) nodeColor[x.p]=col;
+      issues.push({name:N[x.p].name, team:N[x.p].team!=null? N[N[x.p].team].name : deptName(N[x.p].dept)+' leadership', role:N[x.r].name, cert:CERT_SHORT[N[x.c].key], status:{text:st, cls: col===C.bad?'bad':'warn'}, expires: ce? ce.expires : '—', _node:x.p, _r:rank[st]}); }
+    issues.sort((a,b)=>a._r-b._r || (a.expires<b.expires?-1:1));
+    steps.push({title:'Check CERTIFIED edges and expiry dates', detail:`Red = missing (dashed) or expired, amber = expires within 30 days; valid certifications stay grey.`, nodes:Object.keys(nodeColor).map(Number), nodeColor, edges:cEdges, labels:issues.filter(x=>x._r===0).slice(0,10).map(x=>x._node), line:[1,2,3,4,5,6,7], legend:'cert', edgeAlpha:0.7});
+    steps.push({title:'Return flagged people with their team', detail:'One MEMBER_OF hop per flagged person.', nodes:[], line:[8,9,10]});
+    const c = s=>issues.filter(x=>x.status.text===s).length;
+    const byTeam={}; issues.forEach(x=>byTeam[x.team]=(byTeam[x.team]||0)+1); const worst=Object.entries(byTeam).sort((a,b)=>b[1]-a[1])[0];
+    return {steps, cols:[{k:'name',l:'Person'},{k:'status',l:'Status',t:'pill'},{k:'cert',l:'Certification'},{k:'expires',l:'Expires'},{k:'team',l:'Team'},{k:'role',l:'Role'}], rows:issues,
+      foot:'Reference date: 18 Nov 2026 (snapshot date of the synthetic data). One row per person and certification.',
+      summary:`As of 18 Nov 2026, <b>${issues.length}</b> open items: <b>${c('Missing')}</b> missing, <b>${c('Expired')}</b> expired, <b>${c('Expires ≤ 30 days')}</b> expiring within 30 days.` + (worst? ` Most affected team: ${esc(worst[0])} (${worst[1]}).`:'')};
+  }});
+
+QUERIES.push({ id:'risk', title:'Skill concentration risk', tag:'Workforce planning', params:[],
+  question: () => `Which skills do many positions need at level 3+, while only a handful of people hold them at expert level (4–5)?`,
+  advantage:['Low','This is an aggregation, which belongs in Snowflake. The graph reuses the same model and lets you click from a risky skill straight to its few experts.'],
+  cypher: () => [
+    `MATCH (s:Skill)<-[req:REQUIRES]-(r:Role)<-[:HOLDS]-(holder:Person)`,
+    `WHERE req.level >= 3`,
+    `WITH s, count(DISTINCT r) AS roles, count(holder) AS positions`,
+    `OPTIONAL MATCH (s)<-[h:HAS_SKILL]-(expert:Person) WHERE h.level >= 4`,
+    `WITH s, roles, positions, count(expert) AS experts,`,
+    `     sum(CASE WHEN h.source = 'Manager-validated' THEN 1 ELSE 0 END) AS validated`,
+    `RETURN s.name, roles, positions, experts, validated,`,
+    `  CASE WHEN experts <= 3 AND positions >= 5 THEN 'Critical'`,
+    `       WHEN experts <= 6 OR experts * 10 < positions THEN 'Thin' ELSE 'OK' END AS risk`,
+    `ORDER BY experts ASC`],
+  sql: () => [
+    `WITH demand AS (`,
+    `  SELECT rr.skill_id, COUNT(DISTINCT rr.role_id) AS roles, COUNT(e.person_id) AS positions`,
+    `  FROM role_requirement rr JOIN employee e ON e.role_id = rr.role_id WHERE rr.level >= 3 GROUP BY 1),`,
+    `supply AS (`,
+    `  SELECT skill_id, COUNT(*) AS experts, SUM(IFF(source = 'Manager-validated', 1, 0)) AS validated`,
+    `  FROM person_skill WHERE level >= 4 GROUP BY 1)`,
+    `SELECT s.name, d.roles, d.positions, COALESCE(sp.experts, 0) AS experts, sp.validated`,
+    `FROM demand d JOIN skill s USING (skill_id) LEFT JOIN supply sp USING (skill_id)`,
+    `ORDER BY experts;`],
+  run(){
+    const steps=[]; const skills=N.filter(n=>n.type==='Skill');
+    steps.push({title:'Scan all Skill nodes', detail:`${skills.length} skills in the taxonomy.`, nodes:skills.map(s=>s.id), line:[0]});
+    const dem=new Map(), rEdges=[], rNodes=new Set();
+    for(const s of skills) for(const e of inn(s.id,'REQUIRES')){ if(e.level<3) continue; const hc=inn(e.s,'HOLDS').length; const d=dem.get(s.id)||{roles:0,pos:0}; d.roles++; d.pos+=hc; dem.set(s.id,d); rEdges.push([e.s,s.id,C.role,0.6]); rNodes.add(e.s); }
+    steps.push({title:'Demand: Skill ← REQUIRES ← Role ← HOLDS', detail:`Count positions whose role requires each skill at level 3 or higher.`, nodes:[...rNodes], edges:rEdges, line:[0,1,2], edgeAlpha:0.4});
+    const sup=new Map(), xEdges=[], xNodes=new Set();
+    for(const s of skills){ const ex=inn(s.id,'HAS_SKILL').filter(h=>h.level>=4); sup.set(s.id, ex); for(const h of ex){ xEdges.push([h.s,s.id,C.person,0.5]); xNodes.add(h.s);} }
+    steps.push({title:'Supply: Skill ← HAS_SKILL {level ≥ 4}', detail:`${xEdges.length} expert-level skill edges held by ${xNodes.size} people.`, nodes:[...xNodes], edges:xEdges, line:[3,4,5], edgeAlpha:0.25, dimNodes:true});
+    const rows=[]; const nodeColor={}; const crit=[]; const critExperts=[]; const ce=[];
+    for(const s of skills){ const d=dem.get(s.id); if(!d) continue; const ex=sup.get(s.id); const n=ex.length; const val=ex.filter(h=>h.source==='Manager-validated').length;
+      const risk = (n<=3 && d.pos>=5) ? 'Critical' : (n<=6 || n*10<d.pos) ? 'Thin' : 'OK';
+      nodeColor[s.id] = risk==='Critical'?C.bad: risk==='Thin'?C.warn:C.ok;
+      if(risk==='Critical'){ crit.push(s.id); for(const h of ex){ critExperts.push(h.s); ce.push([h.s,s.id,C.bad,1.6]); } }
+      rows.push({skill:s.name, cat:s.cat, positions:d.pos, experts:n, validated:val, risk:{text:risk, cls: risk==='Critical'?'bad':risk==='Thin'?'warn':'ok'}, _node:s.id, _o: (risk==='Critical'?0:risk==='Thin'?1:2)}); }
+    rows.sort((a,b)=>a._o-b._o || a.experts-b.experts || b.positions-a.positions);
+    steps.push({title:'Compare supply with demand', detail:`${crit.length} critical skills (≤ 3 experts), ${rows.filter(r=>r._o===1).length} thin. Experts behind the critical skills are labelled.`, nodes:[...Object.keys(nodeColor).map(Number), ...critExperts], nodeColor, edges:ce, labels:[...crit, ...critExperts], line:[6,7,8,9], legend:'risk'});
+    return {steps, cols:[{k:'skill',l:'Skill'},{k:'risk',l:'Risk',t:'pill'},{k:'experts',l:'Experts',t:'num'},{k:'validated',l:'Manager-validated',t:'num'},{k:'positions',l:'Positions needing level 3+',t:'num'},{k:'cat',l:'Category'}], rows,
+      foot:'Experts = people at level 4–5, from any evidence source. Risk rule (demo assumption): critical = ≤ 3 experts and ≥ 5 positions; thin = ≤ 6 experts or fewer than 1 expert per 10 positions.',
+      summary:`<b>${crit.length}</b> skills are single points of failure: ${rows.filter(r=>r._o===0).slice(0,4).map(r=>esc(r.skill)).join(', ')}${crit.length>4?' and more':''}. Click a row to locate a skill on the graph.`};
+  }});
+
+// neighbourhood query, used when someone clicks a node
+const EGO = { id:'ego', title:'Neighbourhood', tag:'Exploration', params:[],
+  question: P => `What is ${N[P.node].name} connected to?`,
+  advantage:['Medium','Schema-free exploration: one pattern returns every relationship type. In SQL you would query each relationship table separately and UNION the results.'],
+  cypher: P => [
+    `MATCH (n:${N[P.node].type} {${N[P.node].type==='Role'?'title':'name'}: ${q(N[P.node].name)}})-[r]-(m)`,
+    `RETURN type(r) AS relationship, labels(m)[0] AS neighbour, count(*) AS n,`,
+    `       collect(coalesce(m.name, m.title))[0..3] AS examples`,
+    `ORDER BY n DESC`],
+  sql: P => [
+    `-- one query per relationship table, e.g. for a person:`,
+    `SELECT 'HAS_SKILL', COUNT(*) FROM person_skill WHERE person_id = :id`,
+    `UNION ALL SELECT 'REPORTS_TO', COUNT(*) FROM employee WHERE person_id = :id AND manager_id IS NOT NULL`,
+    `UNION ALL SELECT 'COMPLETED', COUNT(*) FROM completion WHERE person_id = :id`,
+    `UNION ALL SELECT 'COLLABORATES_WITH', COUNT(*) FROM collaboration WHERE :id IN (person_a, person_b)`,
+    `UNION ALL ... -- and so on for every table that references the entity`],
+  run(P){
+    const n=N[P.node], steps=[];
+    steps.push({title:'Find the node', detail:`${n.type}: ${n.name}.`, nodes:[n.id], labels:[n.id], line:[0]});
+    const all = both(n.id).filter(x=>x.e.type!=='MOVED_TO' || true);
+    const edges=[], nodes=[], groups={};
+    for(const {e,o} of all){ const out1 = e.s===n.id; const key = (e.type==='COLLABORATES_WITH'?'↔ ':out1?'→ ':'← ')+e.type+' · '+N[o].type; (groups[key]=groups[key]||[]).push(o); edges.push([n.id,o,TYPE_COLOR[N[o].type],0.8]); nodes.push(o); }
+    const big = edges.length>120;
+    steps.push({title:'Expand all relationships', detail:`${all.length} relationships of ${Object.keys(groups).length} kinds.`, nodes, edges, labels: big? [] : nodes, line:[0,1,2,3], edgeAlpha: big?0.35:0.8});
+    const rows = Object.entries(groups).sort((a,b)=>b[1].length-a[1].length).map(([k,ids])=>({rel:k, n:ids.length, ex: ids.slice(0,3).map(i=>N[i].name).join(', ') + (ids.length>3?' …':''), _node: ids[0]}));
+    return {steps, cols:[{k:'rel',l:'Relationship'},{k:'n',l:'Count',t:'num'},{k:'ex',l:'Examples'}], rows, summary: describe(n)};
+  }};
+
+function describe(n){
+  if(n.type==='Person'){ const r=N[n.role]; return `<b>${esc(n.name)}</b> · ${esc(r.name)} · ${esc(deptName(n.dept))}${n.team!=null?' · '+esc(N[n.team].name):''} · ${n.tenure} yrs tenure · performance ${n.perf}/5.`; }
+  if(n.type==='Role') return `<b>${esc(n.name)}</b> · ${esc(deptName(n.dept))} · seniority ${n.sen} · ${n.hc} incumbents.`;
+  if(n.type==='Skill') return `<b>${esc(n.name)}</b> · ${esc(n.cat)} · held by ${n.holders} people.`;
+  if(n.type==='Course') return `<b>${esc(n.name)}</b> · ${n.hours} h · ${esc(n.provider)} · teaches up to level ${n.upTo}.`;
+  if(n.type==='Team') return `<b>${esc(n.name)}</b> · ${esc(deptName(n.dept))} · ${n.size} members.`;
+  if(n.type==='Department') return `<b>${esc(n.name)}</b> · ${n.size} people.`;
+  return `<b>${esc(n.name)}</b> · ${n.type}.`;
+}
+
+function execute(query, P){
+  TR = {edges:0, nodes:new Set()};
+  const t0 = (typeof performance!=='undefined'?performance:Date).now();
+  const res = query.run(P);
+  res.ms = (typeof performance!=='undefined'?performance:Date).now() - t0;
+  res.trEdges = TR.edges; res.trNodes = TR.nodes.size; TR = null;
+  return res;
+}
+
+// defaults that tell a coherent story
+const techs = people.filter(p=>N[p.role].key==='OPT');
+// default story: a technician with some data skills, a real gap to Operations Data Analyst, and a career history
+const mdaReq = sOut(roleId.ODA,'REQUIRES');
+const fitTo = p => { let n=0,d=0; for(const e of mdaReq){ n+=Math.min(p.sk[e.t]||0,e.level); d+=e.level; } return n/d; };
+const defPerson = (techs.find(p=>p.history.length && (p.sk[skillId.SQL]||0)>=2 && fitTo(p)>=0.55 && fitTo(p)<=0.8) || techs.find(p=>fitTo(p)>=0.55 && fitTo(p)<=0.8) || techs[0]).id;
+
+const counts = {}; for(const n of N) counts[n.type]=(counts[n.type]||0)+1;
+const relCounts = {}; for(const e of E) relCounts[e.type]=(relCounts[e.type]||0)+1;
+
+return { N, E, C, TYPE_COLOR, DEPTS, deptByKey, deptNode, heads, roleId, skillId, people, QUERIES, EGO, execute, describe, esc, pct, deptName,
+  defaults:{ person:defPerson, role:roleId.ODA, leader:heads.RC, deptA:deptNode.ENG, deptB:deptNode.OPS }, counts, relCounts, ceo:ceo.id };
+})();
+if (typeof module !== 'undefined') module.exports = PG;
+
+</script>
+<script>
+(function(){
+'use strict';
+const {N, E, C, TYPE_COLOR, DEPTS, deptByKey, QUERIES, EGO, execute, describe, esc, pct, deptName} = PG;
+const $ = id => document.getElementById(id);
+const reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const ease = t => 1 - Math.pow(1-t, 3);
+const fmt = n => n.toLocaleString('en');
+const BG = '#0c1320';
+
+const S = { qid:'gap', params:Object.assign({}, PG.defaults), lang:'cypher', res:null, q:null, P:null, step:-1, t:1, playing:false, done:false, speed:1, hover:null, ego:null, pulse:null, activeRow:-1 };
+const qById = id => id==='ego' ? EGO : QUERIES.find(q=>q.id===id);
+
+// ---------- header numbers ----------
+{ const c = PG.counts; const rel = E.length;
+  $('kpis').innerHTML = [['People',c.Person],['Teams',c.Team],['Roles',c.Role],['Skills',c.Skill],['Courses',c.Course],['Relationships',rel]]
+    .map(([l,v])=>`<div class="kpi"><b>${fmt(v)}</b><span>${l}</span></div>`).join(''); }
+
+// ---------- query list ----------
+function renderQList(){
+  $('qlist').innerHTML = QUERIES.map((q,i)=>`<button class="q${S.qid===q.id?' on':''}" data-q="${q.id}" aria-pressed="${S.qid===q.id}"><span class="qn">${i+1}</span><span class="qt">${esc(q.title)}</span><span class="qtag">${esc(q.tag)}</span></button>`).join('');
+}
+$('qlist').addEventListener('click', e=>{ const b=e.target.closest('button[data-q]'); if(!b) return; S.qid=b.dataset.q; S.ego=null; renderQList(); renderParams(); run('play'); });
+
+// ---------- parameters ----------
+const nameToId = new Map(PG.people.map(p=>[p.name.toLowerCase(), p.id]));
+$('peopleList').innerHTML = PG.people.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${esc(p.name)}">${esc(N[p.role].name)} · ${esc(deptName(p.dept))}</option>`).join('');
+const roleOptions = () => [...DEPTS, deptByKey.EXEC].map(d=>{ const rs=N.filter(n=>n.type==='Role'&&n.dept===d.key).sort((a,b)=>a.sen-b.sen); return `<optgroup label="${esc(d.name)}">${rs.map(r=>`<option value="${r.id}"${r.id===S.params.role?' selected':''}>${esc(r.name)}</option>`).join('')}</optgroup>`; }).join('');
+const leaderOptions = () => { const headsG = `<optgroup label="Department heads">${DEPTS.map(d=>{const id=PG.heads[d.key]; return `<option value="${id}"${id===S.params.leader?' selected':''}>${esc(N[id].name)} · ${esc(N[N[id].role].name)}</option>`;}).join('')}</optgroup>`;
+  const leads = DEPTS.map(d=>{ const ts=N.filter(n=>n.type==='Team'&&n.dept===d.key); return `<optgroup label="Team leads · ${esc(d.name)}">${ts.map(t=>`<option value="${t.lead}"${t.lead===S.params.leader?' selected':''}>${esc(N[t.lead].name)} · ${esc(t.name)}</option>`).join('')}</optgroup>`; }).join('');
+  return headsG + leads; };
+const deptOptions = sel => DEPTS.map(d=>`<option value="${PG.deptNode[d.key]}"${PG.deptNode[d.key]===sel?' selected':''}>${esc(d.name)}</option>`).join('');
+const personHint = id => { const p=N[id]; return `${esc(N[p.role].name)} · ${esc(deptName(p.dept))} · ${esc(p.loc)} · ${p.tenure} yrs`; };
+
+function renderParams(){
+  const q = qById(S.qid); const box = $('params');
+  if(S.qid==='ego'){
+    const n = N[S.ego];
+    const acts = [];
+    if(n.type==='Person'){ acts.push(['gap','Skills gap','person'],['career','Career paths','person'],['learn','Learning path','person']); if(E.some(e=>e.type==='REPORTS_TO'&&e.t===n.id) && n.id!==PG.ceo) acts.push(['succession','Succession bench','leader']); }
+    if(n.type==='Role' && n.dept!=='EXEC') acts.push(['talent','Internal talent','role'],['gap','Skills gap (for '+N[S.params.person].name.split(' ')[0]+')','role']);
+    if(n.type==='Department') acts.push(['ona','Who bridges to '+N[S.params.deptA===n.id?S.params.deptB:S.params.deptA].name,'deptA']);
+    box.innerHTML = `<p class="question">${esc(q.question({node:S.ego}))}</p>` + (acts.length? `<div class="follow"><span>Ask about this ${n.type.toLowerCase()}:</span>${acts.map(a=>`<button class="chip" data-follow="${a[0]}" data-param="${a[2]}">${esc(a[1])}</button>`).join('')}</div>` : '<p class="muted">Click a person, role or department to get follow-up questions.</p>');
+    return;
+  }
+  const P = S.params; const parts = [`<p class="question">${esc(q.question(P))}</p>`];
+  for(const k of q.params){
+    if(k==='person') parts.push(`<div class="field"><label for="p-person">Employee</label><div class="row"><input id="p-person" list="peopleList" value="${esc(N[P.person].name)}" autocomplete="off" spellcheck="false"><button class="btn small" id="p-random" type="button">Random</button></div><div class="hint" id="p-person-hint">${personHint(P.person)}</div></div>`);
+    if(k==='role') parts.push(`<div class="field"><label for="p-role">Target role</label><select id="p-role">${roleOptions()}</select></div>`);
+    if(k==='leader') parts.push(`<div class="field"><label for="p-leader">Leader</label><select id="p-leader">${leaderOptions()}</select></div>`);
+    if(k==='deptA') parts.push(`<div class="field"><label for="p-deptA">Department A</label><select id="p-deptA">${deptOptions(P.deptA)}</select></div>`);
+    if(k==='deptB') parts.push(`<div class="field"><label for="p-deptB">Department B</label><select id="p-deptB">${deptOptions(P.deptB)}</select></div>`);
+  }
+  if(!q.params.length) parts.push(`<p class="muted">No parameters: this question scans the whole graph.</p>`);
+  box.innerHTML = parts.join('');
+  const pin = $('p-person');
+  if(pin){ pin.addEventListener('change', ()=>{ const id = nameToId.get(pin.value.trim().toLowerCase()); const hint=$('p-person-hint');
+      if(id===undefined){ hint.innerHTML = 'No employee with that name. Pick one from the list.'; hint.classList.add('err'); return; }
+      hint.classList.remove('err'); S.params.person=id; renderParams(); run('play'); });
+    $('p-random').addEventListener('click', ()=>{ S.params.person = PG.people[1+Math.floor(Math.random()*(PG.people.length-1))].id; renderParams(); run('play'); }); }
+  for(const k of ['role','leader','deptA','deptB']){ const el=$('p-'+k); if(el) el.addEventListener('change', ()=>{ S.params[k]=Number(el.value); renderParams(); run('play'); }); }
+}
+$('params').addEventListener('click', e=>{ const b=e.target.closest('button[data-follow]'); if(!b) return; const n=N[S.ego];
+  if(b.dataset.param==='deptA'){ if(S.params.deptB===n.id) S.params.deptB=S.params.deptA; S.params.deptA=n.id; } else S.params[b.dataset.param]=n.id;
+  S.qid=b.dataset.follow; S.ego=null; renderQList(); renderParams(); run('play'); });
+
+// ---------- code panel ----------
+const CY_KW = /\b(OPTIONAL MATCH|MATCH|WHERE|WITH|RETURN|ORDER BY|LIMIT|CASE|WHEN|THEN|ELSE|END|AND|OR|NOT|AS|UNWIND|DISTINCT|IS NULL|IS NOT NULL|NULL|UNION ALL|UNION|DESC|ASC|CALL|IN|SELECT|FROM|LEFT JOIN|CROSS JOIN|JOIN|ON|GROUP BY|HAVING|USING|RECURSIVE|CREATE TEMP TABLE|OVER|PARTITION BY|COALESCE|LEAST|SUM|COUNT|MAX|MIN|LEAD|IFF|DATEADD|CURRENT_DATE)\b/g;
+function hlLine(line){
+  let comment = '';
+  const ci = line.search(/(\/\/|-- )/);
+  if(ci>=0 && !/"[^"]*$/.test(line.slice(0,ci))){ comment = line.slice(ci); line = line.slice(0,ci); }
+  const parts = line.split(/("[^"]*"|'[^']*')/);
+  let html = parts.map((p,i)=>{ if(i%2) return `<span class="str">${esc(p)}</span>`;
+    let h = esc(p);
+    h = h.replace(/:(Person|Role|Skill|Course|Certification|Team|Department)\b/g, (m,l)=>`<span class="lb" data-t="${l.toLowerCase()}">:${l}</span>`);
+    h = h.replace(/:([A-Z][A-Z_]{2,}[A-Z])(?![a-z])/g, '<span class="rt">:$1</span>');
+    h = h.replace(CY_KW, '<span class="kw">$1</span>');
+    h = h.replace(/\b(coalesce|count|sum|min|max|collect|reduce|length|relationships|labels|type|date|duration|toFloat|gds\.betweenness\.stream)\(/g, '<span class="fn">$1</span>(');
+    return h; }).join('');
+  if(comment) html += `<span class="cm">${esc(comment)}</span>`;
+  return html;
+}
+function renderCode(){
+  if(!S.q) return;
+  const lines = S.lang==='cypher' ? S.q.cypher(S.P) : S.q.sql(S.P);
+  $('code').innerHTML = lines.map((l,i)=>`<span class="ln" data-i="${i}">${hlLine(l)}</span>`).join('');
+  const [lvl, note] = S.q.advantage;
+  $('verdict').innerHTML = `<span class="adv" data-l="${lvl.split('–')[0].toLowerCase()}">Graph advantage over SQL: ${esc(lvl)}</span><span>${esc(note)} <i>(Author’s assessment, not a benchmark.)</i></span>`;
+  highlightCode();
+}
+function highlightCode(){
+  const on = new Set(S.lang==='cypher' && S.res && S.step>=0 ? (S.res.steps[S.step].line||[]) : []);
+  let first=null;
+  for(const el of $('code').querySelectorAll('.ln')){ const is = on.has(Number(el.dataset.i)); el.classList.toggle('on', is); if(is && !first) first=el; }
+  if(first){ const box=$('code'); const top=first.offsetTop - box.offsetTop; if(top < box.scrollTop || top > box.scrollTop + box.clientHeight - 30) box.scrollTop = Math.max(0, top - 20); }
+}
+for(const b of document.querySelectorAll('.tab')) b.addEventListener('click', ()=>{ S.lang=b.dataset.lang; document.querySelectorAll('.tab').forEach(x=>{ x.classList.toggle('on', x===b); x.setAttribute('aria-selected', x===b); }); renderCode(); });
+
+// ---------- running a query ----------
+function run(mode){
+  S.q = qById(S.qid); S.P = S.qid==='ego' ? {node:S.ego} : Object.assign({}, S.params);
+  S.res = execute(S.q, S.P); S.step=-1; S.done=false; S.activeRow=-1; S.pulse=null; S.allRows=false;
+  renderCode(); renderStats(); renderTrace(); renderResults(); updateButtons();
+  if(mode==='instant' || (reduced && mode==='play')){ S.playing = mode==='play'; S.step=S.res.steps.length-1; S.t=1; stepChanged(); finish(); }
+  else if(mode==='step'){ S.playing=false; advance(); }
+  else { S.playing=true; advance(); }
+}
+function stepDur(){ const s=S.res.steps[S.step]; const n=(s.edges||[]).length; return (n>300?1300:950)/S.speed; }
+function advance(){
+  if(!S.res) return;
+  if(S.step >= S.res.steps.length-1){ if(!S.done) finish(); return; }
+  S.step++; S.t = reduced ? 1 : 0; S.stepStart = performance.now(); stepChanged(); updateButtons();
+}
+function stepChanged(){ buildHL(); renderTrace(); highlightCode(); renderCaption(); renderLegend(); measureOverlays(); fitToHL(); dirty=true; }
+function finish(){ S.done=true; S.playing=false; renderTrace(); renderResults(); renderCaption(); updateButtons(); measureOverlays(); dirty=true; }
+function updateButtons(){ const atEnd = S.res && S.step>=S.res.steps.length-1 && S.done; $('btnStep').textContent = (!S.res || atEnd) ? 'Step through' : 'Next step'; $('btnSkip').disabled = !S.res || atEnd; }
+$('btnRun').addEventListener('click', ()=>run('play'));
+$('btnStep').addEventListener('click', ()=>{ if(!S.res || S.done) run('step'); else { S.playing=false; if(S.t<1){ S.t=1; } advance(); if(S.step===S.res.steps.length-1) setTimeout(()=>{ if(!S.done && S.t>=1) finish(); }, 0); } updateButtons(); });
+$('btnSkip').addEventListener('click', ()=>{ if(!S.res) return; S.playing=false; S.step=S.res.steps.length-1; S.t=1; stepChanged(); finish(); });
+$('speed').addEventListener('change', e=>{ S.speed=Number(e.target.value); });
+
+// ---------- trace, stats, results ----------
+function renderStats(){
+  const r=S.res; const total=N.length;
+  $('stats').innerHTML = `<div><b>${fmt(r.trEdges)}</b><span>relationships traversed</span></div><div><b>${fmt(r.trNodes)}</b><span>of ${fmt(total)} nodes touched (${pct(r.trNodes/total)})</span></div><div><b>${r.ms<1?'<1':r.ms.toFixed(0)} ms</b><span>to run in your browser</span></div>`;
+}
+function renderTrace(){
+  if(!S.res){ $('trace').innerHTML=''; return; }
+  $('trace').innerHTML = S.res.steps.map((s,i)=>{ const st = i<S.step || (i===S.step && S.done) ? 'done' : i===S.step ? 'cur' : 'todo'; const ne=(s.edges||[]).length;
+    return `<li class="${st}"><button type="button" data-i="${i}"><span class="sn">${i+1}</span><span class="sb"><span class="st">${esc(s.title)}</span>${ne?`<span class="se">${fmt(ne)} relationship${ne===1?'':'s'} drawn</span>`:''}<span class="sd">${esc(s.detail)}</span></span></button></li>`; }).join('');
+}
+$('trace').addEventListener('click', e=>{ const b=e.target.closest('button[data-i]'); if(!b||!S.res) return; S.playing=false; S.step=Number(b.dataset.i); S.t=1; stepChanged(); if(S.step===S.res.steps.length-1) finish(); else { S.done=false; renderTrace(); renderResults(); updateButtons(); } });
+
+function cell(c, v){
+  if(c.t==='pct') return `<td class="pc"><span class="bar"><i style="width:${Math.round(v*100)}%"></i></span>${pct(v)}</td>`;
+  if(c.t==='num') return `<td class="num">${esc(v)}</td>`;
+  if(c.t==='pill') return `<td><span class="pill ${v.cls}">${esc(v.text)}</span></td>`;
+  if(c.t==='pips'){ let h=''; for(let i=1;i<=5;i++){ const filled=i<=v.have; const need=i<=v.req; const cls = filled ? (v.have>=v.req?'ok':'warn') : need ? 'need' : 'off'; h+=`<i class="${cls}"></i>`; } return `<td><span class="pips" title="has ${v.have}, requires ${v.req}">${h}</span> <span class="muted">${v.have}/${v.req}</span></td>`; }
+  return `<td>${esc(v)}</td>`;
+}
+function renderResults(){
+  const tb=$('results'), sum=$('summary');
+  if(!S.res){ tb.innerHTML=''; sum.innerHTML=''; $('resFoot').innerHTML=''; return; }
+  if(!S.done){ sum.innerHTML = `<span class="muted">The result appears when the last step finishes. Use “Skip to result” to jump ahead.</span>`; tb.innerHTML=''; $('resCount').textContent=''; $('resFoot').innerHTML=''; return; }
+  const r=S.res; sum.innerHTML = r.summary;
+  const rows = S.allRows ? r.rows : r.rows.slice(0,40);
+  $('resCount').textContent = r.rows.length ? (r.rows.length>rows.length? `${rows.length} of ${r.rows.length} rows` : `${r.rows.length} row${r.rows.length===1?'':'s'}`) : '';
+  $('resFoot').innerHTML = (r.rows.length>rows.length ? `<button class="btn small" type="button" id="showAll">Show all ${r.rows.length} rows</button>` : '') + (r.foot ? `<p>${esc(r.foot)}</p>` : '');
+  const sa=$('showAll'); if(sa) sa.addEventListener('click', ()=>{ S.allRows=true; renderResults(); });
+  tb.innerHTML = r.rows.length ? `<thead><tr>${r.cols.map(c=>`<th${c.t==='num'||c.t==='pct'?' class="num"':''}>${esc(c.l)}</th>`).join('')}</tr></thead><tbody>${rows.map((row,i)=>`<tr data-i="${i}" tabindex="0"${i===S.activeRow?' class="on"':''}>${r.cols.map(c=>cell(c,row[c.k])).join('')}</tr>`).join('')}</tbody>` : '';
+}
+function focusRow(i){ const row=S.res.rows[i]; if(!row || row._node==null) return; S.activeRow=i; for(const tr of $('results').querySelectorAll('tr[data-i]')) tr.classList.toggle('on', Number(tr.dataset.i)===i); const n=N[row._node]; S.pulse={id:n.id, t0:performance.now()}; flyTo(n.x, n.y, Math.max(cam.k, 2.4)); dirty=true; }
+$('results').addEventListener('click', e=>{ const tr=e.target.closest('tr[data-i]'); if(tr) focusRow(Number(tr.dataset.i)); });
+$('results').addEventListener('keydown', e=>{ if(e.key==='Enter'){ const tr=e.target.closest('tr[data-i]'); if(tr) focusRow(Number(tr.dataset.i)); } });
+
+function renderCaption(){
+  const cap=$('caption');
+  if(!S.res || S.step<0){ cap.hidden=true; return; }
+  const s=S.res.steps[S.step]; cap.hidden=false;
+  cap.innerHTML = `<span class="cstep">Step ${S.step+1} of ${S.res.steps.length}${S.done?' · done':''}</span><b>${esc(s.title)}</b><span class="cdet">${esc(s.detail)}</span>`;
+}
+
+// ---------- legend ----------
+const SHAPE_SVG = { Person:'<circle cx="7" cy="7" r="4"/>', Role:'<rect x="3" y="3" width="8" height="8"/>', Skill:'<circle cx="7" cy="7" r="5.5"/>', Course:'<path d="M7 1.5 12.5 7 7 12.5 1.5 7z"/>', Certification:'<path d="M7 1.5l4.8 2.75v5.5L7 12.5 2.2 9.75v-5.5z"/>', Team:'<circle cx="7" cy="7" r="4.5" fill="none" stroke-width="1.6"/>' };
+const ico = (t,col) => `<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="${col}" stroke="${col}">${SHAPE_SVG[t]}</svg>`;
+const LEGENDS = { gap:[[C.ok,'Meets required level'],[C.warn,'Below required level'],[C.bad,'No evidence']], ready:[[C.ok,'Ready now'],[C.warn,'Ready in 1–2 years']], cert:[[C.bad,'Expired, or missing (dashed)'],[C.warn,'Expires ≤ 30 days'],[C.muted,'Valid']], risk:[[C.bad,'Critical'],[C.warn,'Thin'],[C.ok,'OK']] };
+function renderLegend(){
+  const types = ['Person','Role','Skill','Course','Certification','Team'].map(t=>`<span>${ico(t, TYPE_COLOR[t])}${t}</span>`).join('');
+  let extra = '';
+  const hl = S.res && S.step>=0;
+  if(!hl) extra = `<div class="lg-depts"><span>Each cluster is one department; its teams are the small rings.</span></div>`;
+  else { let key=null; for(let i=0;i<=S.step;i++) if(S.res.steps[i].legend) key=S.res.steps[i].legend; const items = Array.isArray(key) ? key : key ? LEGENDS[key] : null;
+    if(items) extra = `<div class="lg-depts"><span class="lg-h">Colour in this query:</span>${items.map(([c,l])=>`<span><i style="background:${c}"></i>${esc(l)}</span>`).join('')}</div>`; }
+  $('legend').innerHTML = `<div class="lg-types">${types}</div>${extra}`;
+}
+
+// ---------- canvas renderer ----------
+const cv=$('cv'), ctx=cv.getContext('2d');
+let W=1, H=1, dpr=1, dirty=true;
+const cam={x:0,y:0,k:0.5}; let camAnim=null;
+function resize(){ measureOverlays(); const r=cv.parentElement.getBoundingClientRect(); W=Math.max(1,r.width); H=Math.max(1,r.height); dpr=window.devicePixelRatio||1; cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); dirty=true; }
+function fitBox(x0,y0,x1,y1,animate,maxK){
+  const small = W<600; const lg=$('legend').getBoundingClientRect(), cvr=cv.getBoundingClientRect(); const pl=small?16:36, pr=small?16:36, pt=Math.max(small?70:84, lg.bottom-cvr.top+18), pb = (S.res && S.step>=0) ? (small?120:112) : 40;
+  const w=Math.max(x1-x0,220), h=Math.max(y1-y0,220); const k=clamp(Math.min((W-pl-pr)/w,(H-pt-pb)/h), 0.15, maxK||2.6);
+  const scx=(pl+W-pr)/2, scy=(pt+H-pb)/2; const cx=(x0+x1)/2, cy=(y0+y1)/2;
+  setCam(cx-(scx-W/2)/k, cy-(scy-H/2)/k, k, animate); }
+function setCam(x,y,k,animate){ if(animate && !reduced){ camAnim={from:{x:cam.x,y:cam.y,k:cam.k}, to:{x,y,k}, t0:performance.now(), dur:650}; } else { cam.x=x; cam.y=y; cam.k=k; camAnim=null; } dirty=true; }
+function flyTo(x,y,k){ setCam(x,y,clamp(k,0.15,8),true); }
+let worldBox=[0,0,0,0];
+{ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const n of N){ x0=Math.min(x0,n.x); y0=Math.min(y0,n.y); x1=Math.max(x1,n.x); y1=Math.max(y1,n.y); } worldBox=[x0-20,y0-20,x1+20,y1+20]; }
+const fitAll = animate => fitBox(...worldBox, animate);
+function fitToHL(){ if(!HL) return; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9, c=0; for(const id of HL.nodes.keys()){ const n=N[id]; x0=Math.min(x0,n.x); y0=Math.min(y0,n.y); x1=Math.max(x1,n.x); y1=Math.max(y1,n.y); c++; } if(c) fitBox(x0,y0,x1,y1,true); }
+
+let OVERLAYS=[];
+function measureOverlays(){ const c=cv.getBoundingClientRect(); OVERLAYS=['legend','zoom-box','caption'].map(id=>$(id)).filter(el=>el && !el.hidden).map(el=>{ const r=el.getBoundingClientRect(); return [r.left-c.left-4, r.top-c.top-4, r.width+8, r.height+8]; }); }
+let HL=null;
+function buildHL(){
+  if(!S.res || S.step<0){ HL=null; return; }
+  const nodes=new Map(), edges=[], labels=[];
+  for(let i=0;i<=S.step;i++){ const s=S.res.steps[i];
+    for(const id of s.nodes){ const col=(s.nodeColor&&s.nodeColor[id]) || (nodes.has(id)? nodes.get(id).color : TYPE_COLOR[N[id].type]); const prev=nodes.get(id); nodes.set(id,{color:col, step: prev? prev.step : i, dim: !!s.dimNodes && !(prev && !prev.dim)}); }
+    for(const e of (s.edges||[])) edges.push({a:e[0], b:e[1], color:e[2]||C.muted, w:e[3]||1, dash:!!e[4], step:i, alpha:s.edgeAlpha||0.85});
+    for(const id of (s.labels||[])) labels.push({id, step:i});
+    if(s.nodeColor) for(const id in s.nodeColor){ const n=nodes.get(Number(id)); if(n){ n.color=s.nodeColor[id]; n.dim=false; } }
+  }
+  // newest labels first, so they win collisions
+  labels.sort((a,b)=>b.step-a.step);
+  HL={nodes, edges, labels};
+}
+
+const baseColor = n => TYPE_COLOR[n.type];
+function radius(n){ const k=cam.k; switch(n.type){
+  case 'Person': return n.id===PG.ceo ? clamp(4*k,2.5,9) : clamp(2.1*k,1.2,6.5);
+  case 'Role': return clamp(3.9*k,2.4,10); case 'Skill': return clamp(4.8*k,2.8,12); case 'Course': return clamp(3.1*k,1.8,8);
+  case 'Certification': return clamp(6*k,3.5,14); case 'Team': return clamp(2.6*k,1.4,7); default: return clamp(8*k,4,20); } }
+function shape(n, x, y, r){
+  ctx.beginPath();
+  switch(n.type){
+    case 'Role': ctx.rect(x-r*0.9, y-r*0.9, r*1.8, r*1.8); ctx.fill(); break;
+    case 'Course': ctx.moveTo(x,y-r); ctx.lineTo(x+r,y); ctx.lineTo(x,y+r); ctx.lineTo(x-r,y); ctx.closePath(); ctx.fill(); break;
+    case 'Certification': for(let i=0;i<6;i++){ const a=Math.PI/6+i*Math.PI/3; i?ctx.lineTo(x+r*Math.cos(a),y+r*Math.sin(a)):ctx.moveTo(x+r*Math.cos(a),y+r*Math.sin(a)); } ctx.closePath(); ctx.fill(); break;
+    case 'Team': case 'Department': ctx.arc(x,y,r,0,Math.PI*2); ctx.lineWidth = n.type==='Team'?1:1.4; ctx.stroke(); break;
+    default: ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  }
+}
+const REPORTS = E.filter(e=>e.type==='REPORTS_TO'), REQS = E.filter(e=>e.type==='REQUIRES'), MOVES = E.filter(e=>e.type==='MOVED_TO');
+
+function draw(now){
+  const k=cam.k; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=BG; ctx.fillRect(0,0,W,H);
+  for(const n of N){ n.sx=(n.x-cam.x)*k+W/2; n.sy=(n.y-cam.y)*k+H/2; }
+  const hl = HL;
+  // orientation rings
+  ctx.globalAlpha = hl?0.04:0.07; ctx.strokeStyle='#9fb2d0'; ctx.lineWidth=1; ctx.setLineDash([2,6]);
+  for(const r of [150, 690]){ ctx.beginPath(); ctx.arc((0-cam.x)*k+W/2, (0-cam.y)*k+H/2, r*k, 0, Math.PI*2); ctx.stroke(); }
+  ctx.setLineDash([]);
+  // base edges
+  const line = (arr, col, al) => { ctx.globalAlpha=al; ctx.strokeStyle=col; ctx.beginPath(); for(const e of arr){ const a=N[e.s], b=N[e.t]; ctx.moveTo(a.sx,a.sy); ctx.lineTo(b.sx,b.sy);} ctx.stroke(); };
+  ctx.lineWidth=1;
+  line(REPORTS, '#9aa6bd', hl?0.03:0.11);
+  if(!hl){ line(REQS, C.role, 0.07); }
+  // base nodes
+  for(const n of N){ if(hl && hl.nodes.has(n.id)) continue; const r=radius(n); ctx.globalAlpha = hl ? (n.type==='Person'?0.16:0.22) : (n.type==='Team'?0.45:n.type==='Department'?0.5:0.92); const col = hl ? '#55627a' : baseColor(n); ctx.fillStyle=col; ctx.strokeStyle=col; shape(n, n.sx, n.sy, r); }
+  if(hl){
+    for(const e of hl.edges){ const a=N[e.a], b=N[e.b]; let f=1; if(e.step===S.step) f=ease(clamp(S.t/0.7,0,1)); if(f<=0) continue;
+      ctx.globalAlpha = e.alpha; ctx.strokeStyle=e.color; ctx.lineWidth = Math.max(0.6, e.w*clamp(0.55+k*0.45,0.7,2));
+      if(e.dash) ctx.setLineDash([4,3]);
+      ctx.beginPath(); ctx.moveTo(a.sx,a.sy); ctx.lineTo(a.sx+(b.sx-a.sx)*f, a.sy+(b.sy-a.sy)*f); ctx.stroke();
+      if(e.dash) ctx.setLineDash([]);
+      if(e.step===S.step && f<1 && f>0.02 && hl.edges.length<400){ ctx.globalAlpha=0.9; ctx.fillStyle=e.color; ctx.beginPath(); ctx.arc(a.sx+(b.sx-a.sx)*f, a.sy+(b.sy-a.sy)*f, 1.8, 0, Math.PI*2); ctx.fill(); } }
+    for(const [id,h] of hl.nodes){ const n=N[id]; let al=1; if(h.step===S.step) al=clamp((S.t-0.3)/0.4,0,1); if(al<=0) continue; const r=radius(n)*(h.dim?1:1.25);
+      ctx.fillStyle=h.color; ctx.strokeStyle=h.color;
+      if(!h.dim && n.type!=='Team' && n.type!=='Department'){ ctx.globalAlpha=al*0.55; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(n.sx,n.sy,r+3,0,Math.PI*2); ctx.stroke(); }
+      ctx.globalAlpha = al*(h.dim?0.6:1); shape(n, n.sx, n.sy, r); }
+  }
+  // pulse on focused node
+  if(S.pulse){ const n=N[S.pulse.id]; const p=((now-S.pulse.t0)%1400)/1400; ctx.globalAlpha=1-p; ctx.strokeStyle='#ffffff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(n.sx,n.sy,radius(n)+4+p*18,0,Math.PI*2); ctx.stroke(); }
+  if(S.hover!=null){ const n=N[S.hover]; ctx.globalAlpha=1; ctx.strokeStyle='#ffffff'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(n.sx,n.sy,radius(n)+3,0,Math.PI*2); ctx.stroke(); }
+  drawLabels(hl);
+  ctx.globalAlpha=1;
+}
+
+function drawLabels(hl){
+  const placed=OVERLAYS.slice(); const k=cam.k;
+  const fits = (x,y,w,h) => { if(x<2||y<2||x+w>W-2||y+h>H-2) return false; for(const p of placed) if(x<p[0]+p[2] && x+w>p[0] && y<p[1]+p[3] && y+h>p[1]) return false; placed.push([x,y,w,h]); return true; };
+  const label = (n, txt, col, font, alpha) => { ctx.font=font; const w=ctx.measureText(txt).width; const r=radius(n); const x=n.sx+r+4, y=n.sy-7; if(!fits(x-2,y,w+4,14)) return; ctx.globalAlpha=alpha; ctx.lineWidth=3; ctx.strokeStyle=BG; ctx.lineJoin='round'; ctx.strokeText(txt,x,y+10.5); ctx.fillStyle=col; ctx.fillText(txt,x,y+10.5); };
+  const short = s => s.length>30 ? s.slice(0,29)+'…' : s;
+  // department titles
+  ctx.font='600 12px "IBM Plex Sans", system-ui, sans-serif';
+  for(const d of DEPTS){ const txt=d.name.toUpperCase(); const w=ctx.measureText(txt).width; const f=(400-d.rc-16)/400;
+    const cands=[[d.cx*f,d.cy*f],[d.cx,d.cy-d.rc-12],[d.cx,d.cy+d.rc+14],[d.cx*(400+d.rc+16)/400,d.cy*(400+d.rc+16)/400]];
+    let pos=null; for(const [wx,wy] of cands){ const x=(wx-cam.x)*k+W/2, y=(wy-cam.y)*k+H/2; const r=[x-w/2-2,y-8,w+4,16]; if(!placed.some(p=>r[0]<p[0]+p[2]&&r[0]+r[2]>p[0]&&r[1]<p[1]+p[3]&&r[1]+r[3]>p[1])){ pos=[x,y]; placed.push(r); break; } }
+    if(!pos){ const x=(cands[0][0]-cam.x)*k+W/2, y=(cands[0][1]-cam.y)*k+H/2; pos=[x,y]; }
+    ctx.globalAlpha = hl?0.45:0.95; ctx.lineWidth=4; ctx.strokeStyle=BG; ctx.strokeText(txt,pos[0]-w/2,pos[1]+4); ctx.fillStyle='#c3ccda'; ctx.fillText(txt,pos[0]-w/2,pos[1]+4); }
+  const F = '500 11px "IBM Plex Sans", system-ui, sans-serif';
+  if(S.hover!=null){ const n=N[S.hover]; label(n, short(n.name), '#ffffff', '600 12px "IBM Plex Sans", system-ui, sans-serif', 1); }
+  if(S.pulse){ const n=N[S.pulse.id]; label(n, short(n.name), '#ffffff', '600 12px "IBM Plex Sans", system-ui, sans-serif', 1); }
+  let count=0;
+  if(hl){ for(const l of hl.labels){ if(count>110) break; const n=N[l.id]; const h=hl.nodes.get(l.id); if(!h) continue; if(h.step===S.step && S.t<0.6) continue; label(n, short(n.name), h.color===C.muted?'#c9d3e3':h.color, F, 1); count++; } }
+  // zoom-dependent labels
+  const vis = n => n.sx>-50 && n.sx<W+50 && n.sy>-20 && n.sy<H+20;
+  const alpha = hl?0.45:0.85;
+  for(const n of N){ if(count>160) break; if(hl && hl.nodes.has(n.id)) continue; if(!vis(n)) continue;
+    const show = (n.type==='Skill'||n.type==='Certification') ? k>0.9 : n.type==='Role' ? k>1.15 : n.type==='Course' ? k>1.9 : n.type==='Team' ? k>2.3 : n.type==='Person' ? k>3.4 : false;
+    if(show){ label(n, short(n.name), n.type==='Person'?'#c9d3e3':baseColor(n), F, alpha); count++; } }
+}
+
+function loop(now){
+  if(camAnim){ const t=clamp((now-camAnim.t0)/camAnim.dur,0,1), e=t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2; cam.x=camAnim.from.x+(camAnim.to.x-camAnim.from.x)*e; cam.y=camAnim.from.y+(camAnim.to.y-camAnim.from.y)*e; cam.k=camAnim.from.k*Math.pow(camAnim.to.k/camAnim.from.k,e); if(t>=1) camAnim=null; dirty=true; }
+  if(S.res && S.step>=0 && S.t<1){ S.t = clamp((now-S.stepStart)/stepDur(),0,1); dirty=true; if(S.t>=1){ if(S.step===S.res.steps.length-1 && !S.done) finish(); else renderTrace(); } }
+  else if(S.playing && S.res && S.step<S.res.steps.length-1 && now-S.stepStart > stepDur()+260/S.speed){ advance(); }
+  if(S.pulse) dirty=true;
+  if(dirty){ draw(now); dirty=false; }
+  requestAnimationFrame(loop);
+}
+
+// ---------- interaction ----------
+let drag=null;
+function pickAt(mx,my){ let best=null, bd=1e9; for(const n of N){ const r=Math.max(radius(n)+4, 7); const dx=n.sx-mx, dy=n.sy-my; let d=dx*dx+dy*dy; if(d>r*r) continue; if(HL && HL.nodes.has(n.id)) d*=0.5; if(n.type==='Department') d+=40; if(d<bd){bd=d;best=n;} } return best; }
+const tip=$('tip');
+function tipHTML(n){
+  const rows=[];
+  if(n.type==='Person'){ rows.push(esc(N[n.role].name), esc(deptName(n.dept))+(n.team!=null?' · '+esc(N[n.team].name):''), `${esc(n.loc)} · ${n.tenure} yrs · perf. ${n.perf}/5`); }
+  else if(n.type==='Role'){ rows.push(`${esc(deptName(n.dept))} · seniority ${n.sen}`, `${n.hc} incumbent${n.hc===1?'':'s'}`); }
+  else if(n.type==='Skill'){ rows.push(esc(n.cat), `held by ${n.holders} people`); }
+  else if(n.type==='Course'){ rows.push(`${n.hours} h · ${esc(n.provider)}`, `teaches ${esc(N[n.skill].name)} up to level ${n.upTo}`); }
+  else if(n.type==='Team'){ rows.push(esc(deptName(n.dept)), `${n.size} members · lead ${esc(N[n.lead].name)}`); }
+  else if(n.type==='Department'){ rows.push(`${n.size} people`); }
+  else if(n.type==='Certification'){ rows.push('Required for regulated roles'); }
+  return `<span class="tt" style="color:${TYPE_COLOR[n.type]}">${n.type}</span><b>${esc(n.name)}</b>${rows.map(r=>`<span>${r}</span>`).join('')}<em>Click to query its neighbourhood</em>`;
+}
+cv.addEventListener('pointerdown', e=>{ drag={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y,moved:false}; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e=>{
+  const r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+  if(drag){ const dx=e.clientX-drag.x, dy=e.clientY-drag.y; if(Math.abs(dx)+Math.abs(dy)>4) drag.moved=true; if(drag.moved){ camAnim=null; cam.x=drag.cx-dx/cam.k; cam.y=drag.cy-dy/cam.k; cv.classList.add('grabbing'); tip.hidden=true; dirty=true; return; } }
+  const n=pickAt(mx,my); const id=n?n.id:null;
+  if(id!==S.hover){ S.hover=id; dirty=true; }
+  if(n){ tip.innerHTML=tipHTML(n); tip.hidden=false; const tw=tip.offsetWidth, th=tip.offsetHeight; tip.style.left=Math.min(mx+14, r.width-tw-8)+'px'; tip.style.top=Math.min(my+14, r.height-th-8)+'px'; cv.style.cursor='pointer'; }
+  else { tip.hidden=true; cv.style.cursor=''; }
+});
+cv.addEventListener('pointerleave', ()=>{ tip.hidden=true; if(S.hover!=null){ S.hover=null; dirty=true; } });
+cv.addEventListener('pointerup', e=>{ cv.classList.remove('grabbing'); if(drag && !drag.moved){ const r=cv.getBoundingClientRect(); const n=pickAt(e.clientX-r.left, e.clientY-r.top); if(n) explore(n.id); } drag=null; });
+cv.addEventListener('wheel', e=>{ e.preventDefault(); const r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top; const nk=clamp(cam.k*Math.exp(-e.deltaY*0.0016),0.15,8); const wx=(mx-W/2)/cam.k+cam.x, wy=(my-H/2)/cam.k+cam.y; cam.k=nk; cam.x=wx-(mx-W/2)/nk; cam.y=wy-(my-H/2)/nk; camAnim=null; dirty=true; }, {passive:false});
+cv.addEventListener('keydown', e=>{ if(e.key==='+'||e.key==='=') zoomBy(1.4); else if(e.key==='-') zoomBy(1/1.4); else if(e.key==='0') fitAll(true); else if(e.key.startsWith('Arrow')){ const d=60/cam.k; if(e.key==='ArrowLeft') cam.x-=d; if(e.key==='ArrowRight') cam.x+=d; if(e.key==='ArrowUp') cam.y-=d; if(e.key==='ArrowDown') cam.y+=d; dirty=true; } else return; e.preventDefault(); });
+function zoomBy(f){ setCam(cam.x, cam.y, clamp(cam.k*f,0.15,8), true); }
+$('zin').addEventListener('click', ()=>zoomBy(1.5)); $('zout').addEventListener('click', ()=>zoomBy(1/1.5)); $('zfit').addEventListener('click', ()=>fitAll(true));
+$('zclear').addEventListener('click', ()=>{ $('caption').textContent=''; S.res=null; S.step=-1; S.done=false; S.playing=false; S.pulse=null; HL=null; renderTrace(); renderResults(); renderCaption(); renderLegend(); measureOverlays(); $('stats').innerHTML='<div><span class="muted">Overview. Pick a question or click a node.</span></div>'; $('summary').innerHTML=''; $('resCount').textContent=''; for(const el of $('code').querySelectorAll('.ln')) el.classList.remove('on'); fitAll(true); updateButtons(); });
+function explore(id){ S.qid='ego'; S.ego=id; renderQList(); renderParams(); run('play'); }
+
+// ---------- data model dialog ----------
+function schemaSVG(){
+  const R = PG.relCounts; const f = t => fmt(R[t]||0);
+  const P = {Department:[110,52], Team:[110,180], Person:[400,180], Role:[700,180], Skill:[400,370], Course:[110,370], Certification:[700,370]};
+  const col = {Department:C.dept, Team:C.team, Person:C.person, Role:C.role, Skill:C.skill, Course:C.course, Certification:C.cert};
+  const cnt = PG.counts;
+  const box = (t) => { const [x,y]=P[t]; return `<g><rect x="${x-64}" y="${y-19}" width="128" height="38" rx="8" fill="#141f31" stroke="${col[t]}" stroke-width="1.5"/><text x="${x}" y="${y-1}" text-anchor="middle" class="sn">${t}</text><text x="${x}" y="${y+13}" text-anchor="middle" class="sc">${fmt(cnt[t])} nodes</text></g>`; };
+  const edge = (d, lbl, lx, ly, anchor='middle') => `<path d="${d}" class="se" marker-end="url(#ar)"/>` + [].concat(lbl).map((l,i)=>`<text x="${lx}" y="${ly+i*14}" text-anchor="${anchor}" class="sl">${l}</text>`).join('');
+  return `<svg viewBox="0 0 820 450" role="img" aria-label="Data model of the people graph"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#8d9ab0"/></marker></defs>
+  ${edge('M110 161 V73', `PART_OF · ${f('PART_OF')}`, 118, 120, 'start')}
+  ${edge('M336 180 H176', `MEMBER_OF · ${f('MEMBER_OF')}`, 256, 172)}
+  ${edge('M340 161 L172 70', `HEADS`, 236, 92)}
+  ${edge('M370 161 C 350 100, 420 100, 412 158', `REPORTS_TO · ${f('REPORTS_TO')}`, 385, 96)}
+  ${edge('M430 161 C 470 70, 540 110, 450 168', `COLLABORATES_WITH · ${f('COLLABORATES_WITH')}`, 482, 80, 'start')}
+  ${edge('M464 174 H634', `HOLDS · ${f('HOLDS')}`, 549, 166)}
+  ${edge('M464 188 H634', `HELD · ${f('HELD')}`, 549, 202)}
+  ${edge('M730 161 C 770 100, 650 100, 690 158', `MOVED_TO {moves}`, 710, 100)}
+  ${edge('M400 199 V349', [`HAS_SKILL · ${f('HAS_SKILL')}`, `{level, source,`, ` confidence}`], 408, 256, 'start')}
+  ${edge('M650 199 L452 351', `REQUIRES {level}`, 610, 246, 'start')}
+  ${edge('M176 370 H334', `TEACHES {up_to}`, 256, 362)}
+  ${edge('M360 199 L150 351', `COMPLETED · ${f('COMPLETED')}`, 204, 300, 'end')}
+  ${edge('M80 389 C 60 440, 150 440, 130 391', `REQUIRES_COURSE`, 168, 432, 'start')}
+  ${edge('M740 199 V349', `REQUIRES_CERT`, 732, 300, 'end')}
+  ${edge('M464 199 L650 351', `CERTIFIED {expires}`, 628, 342, 'end')}
+  ${Object.keys(P).map(box).join('')}</svg>`;
+}
+const dlg=$('modal');
+$('btnModel').addEventListener('click', ()=>{ $('schema').innerHTML=schemaSVG(); dlg.hidden=false; $('closeModel').focus(); });
+const closeDlg = () => { dlg.hidden=true; $('btnModel').focus(); };
+$('closeModel').addEventListener('click', closeDlg);
+dlg.addEventListener('click', e=>{ if(e.target===dlg) closeDlg(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !dlg.hidden) closeDlg(); });
+
+// ---------- boot ----------
+window.addEventListener('resize', ()=>{ resize(); });
+resize(); fitAll(false); renderQList(); renderParams(); renderLegend(); updateButtons();
+requestAnimationFrame(loop);
+setTimeout(()=>run('play'), reduced?0:500);
+})();
+
+</script>
+</body>
+</html>
