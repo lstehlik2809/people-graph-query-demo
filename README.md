@@ -74,3 +74,7 @@ node src/verify.js     # optional: independent check of headline numbers
 - Exploring by clicking the graph needs a pointer. The question list, inputs and result rows work with a keyboard.
 - In the graph, status is shown mainly by colour. The result tables carry the same information as text.
 - In a real deployment, collaboration data (for network analysis) and performance ratings need governance, access control and, in many countries, works-council and data-protection approval.
+
+## License
+
+[MIT](LICENSE) © 2026 Ludek Stehlik
